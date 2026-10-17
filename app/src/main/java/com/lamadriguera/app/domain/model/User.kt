@@ -1,14 +1,12 @@
 package com.lamadriguera.app.domain.model
 
-import kotlinx.serialization.Serializable
+import java.time.Instant
 
-@Serializable
+/** Domain model; money uses exact decimal arithmetic, dates use java.time. */
 data class User(
     val id: String,
-    val email: String,
-    val displayName: String? = null,
-    val avatarUrl: String? = null,
     val phone: String? = null,
-    val isVerified: Boolean = false,
-    val createdAt: String? = null
+    val verificationLevel: VerificationLevel = VerificationLevel.NONE,
+    val status: UserStatus = UserStatus.TEMP,
+    val createdAt: Instant
 )
