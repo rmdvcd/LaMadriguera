@@ -17,7 +17,7 @@ data class IdentityVerificationRow(
     @SerialName("full_name")
     val fullName: String,
     val birthdate: String,
-    val status: String = "pending",
+    val status: IdentityVerificationStatus = IdentityVerificationStatus.PENDING,
     @SerialName("verified_by")
     val verifiedBy: String? = null,
     @SerialName("verified_at")

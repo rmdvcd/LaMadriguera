@@ -12,5 +12,7 @@ data class Profile(
     val privacyLevel: PrivacyLevel = PrivacyLevel.PUBLIC,
     val bio: String? = null,
     val reputationAvg: BigDecimal = BigDecimal.ZERO,
-    val reviewsCount: Int = 0
+    val reviewsCount: Int = 0,
+    /** Política de revelación en el chat por defecto para nuevas conversaciones. */
+    val defaultRevealPolicy: RevealPolicy = RevealPolicy.NEVER
 )

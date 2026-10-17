@@ -2,10 +2,11 @@
 
 Aplicación Android de **marketplace y apuestas peer-to-peer para Cuba**.
 
-Este repositorio contiene el esqueleto Android (arquitectura, navegación, tema e inyección)
-y la **capa de persistencia Supabase/Kotlin**: migración SQL con RLS, DTOs serializables,
-modelos, mappers y repositorios base inyectados por Hilt. **Todavía no hay pantallas
-implementadas**; cada ruta del grafo muestra un placeholder.
+Este repositorio contiene el esqueleto Android (arquitectura, navegación, tema e inyección),
+la **capa de persistencia Supabase/Kotlin** (migraciones SQL con RLS, DTOs serializables,
+modelos, mappers y repositorios inyectados por Hilt) y el **módulo de autenticación y
+perfiles** (Fase 1): acceso con teléfono + OTP, verificación de identidad con carnet,
+perfil con reputación y configuración de privacidad.
 
 La configuración del esquema, permisos y pruebas de la capa de datos se documenta en
 [`supabase/README.md`](supabase/README.md).
@@ -132,8 +133,8 @@ com.lamadriguera.app
 │   └── usecase/               Casos de uso (fase 2)
 │
 ├── feature/
-│   ├── auth/        └── di/AuthModule
-│   ├── profile/
+│   ├── auth/        └── di/AuthModule, Splash, PhoneLogin (OTP), IdentityVerification
+│   ├── profile/     └── Profile, PrivacySettings
 │   ├── listings/    └── di/ListingsModule
 │   ├── auction/     └── di/AuctionModule
 │   ├── chat/        └── di/ChatModule
@@ -176,20 +177,50 @@ UI (Compose) → ViewModel → UseCase → Repository (interfaz, domain) ← Imp
 
 | Flujo | Rutas |
 |---|---|
-| Arranque / auth | `Splash`, `Login`, `Register`, `ForgotPassword` |
+| Arranque / auth | `Splash`, `PhoneLogin` (teléfono + OTP), `IdentityVerification` |
 | Inicio | `Home`, `Listings`, `ListingDetail`, `CreateListing`, `EditListing` |
 | Subastas | `Auctions`, `AuctionDetail`, `CreateAuction` |
 | Chat | `Conversations`, `ChatThread` |
 | Apuestas | `BettingHub`, `BetDetail`, `CreateBet`, `MyBets` |
-| Perfil | `Profile`, `EditProfile`, `Settings` |
+| Perfil | `Profile`, `EditProfile`, `Settings`, `PrivacySettings` |
 | Pagos | `Payments`, `Deposit`, `Withdraw`, `TransactionHistory` |
 | Moderación | `Moderation`, `Reports`, `ReportDetail` |
 
 La barra inferior muestra: Publicaciones, Subastas, Chat, Apuestas y Perfil.
 
-> Mientras no exista autenticación, la app arranca directamente en **Publicaciones**
-> para poder ver el shell de navegación. En la fase 1 el arranque pasará por
-> `Splash` y resolverá la sesión.
+La app arranca en **Splash**, que resuelve la sesión: sin sesión va a
+`PhoneLogin`; con sesión, a `Publicaciones`. `Login`, `Register` y
+`ForgotPassword` desaparecieron: el registro y el login comparten el flujo de
+teléfono + código OTP.
+
+---
+
+## Autenticación y perfiles (Fase 1)
+
+- **Acceso**: teléfono + código OTP vía Supabase Auth (provider `OTP`/phone).
+  `SupabaseAuthRepository` envía el SMS (`signInWith(OTP)`), verifica el código
+  (`verifyPhoneOtp`), provisiona `profiles` y expone `sessionState` reactivo.
+- **Estado `temp`**: sin verificar identidad el usuario puede navegar, pero no
+  crear grupos ni apostar. Las **capacidades** viven en `UserCapabilities` y se
+  derivan de `users.status`, `users.verification_level` y la clase de cuenta.
+- **1 teléfono = 1 cuenta principal**: el teléfono tiene unicidad en la BD y el
+  dispositivo registra su cuenta principal (`DeviceAccountRegistry`). Las
+  cuentas adicionales requieren verificación de identidad para subastas y
+  apuestas.
+- **Verificación de identidad**: `IdentityVerificationScreen` sube frente y
+  reverso del carnet al bucket privado `identity-docs` (cada usuario solo ve su
+  carpeta `<uid>/`), y crea una fila `identity_verifications` en `pending`. Un
+  administrador aprueba (`approved`) o rechaza (`rejected`); al aprobar, un
+  trigger promueve la cuenta a `verification_level='identity'`/`status='active'`.
+  Hasta entonces `verification_level='phone'`.
+- **Privacidad** (`PrivacySettingsScreen`): nivel por defecto `public`/`anon`,
+  política de revelación en chat (`never`/`on_deal`/`on_dispute`/`configurable`)
+  y alias. Si se elige `anon` sin alias, se genera `Anon-XXXXXX` (mismo
+  algoritmo en cliente y en el trigger de Postgres). Aviso: *solo puedes cambiar
+  el nivel antes de publicar* (bloqueado si el usuario ya publicó).
+- **Reputación**: `profiles.reputation_avg` y `reviews_count` los calcula un
+  trigger de PostgreSQL al insertar una review (solo las publicadas); la UI las
+  muestra como estrellas + número de reseñas.
 
 ---
 
@@ -211,8 +242,10 @@ Tipografía del sistema para mantener el APK ligero (redes móviles limitadas).
 
 - [x] **Fase 0 — Esqueleto:** Gradle, Hilt, Supabase, Ktor, Coil, DataStore, WorkManager,
       tema, navegación vacía, contratos de dominio y placeholders.
-- [ ] **Fase 1 — Autenticación:** Supabase Auth, sesión persistente, pantallas Login/Registro,
-      resolución Splash → Login/Home.
+- [x] **Fase 1 — Autenticación y perfiles:** Supabase Auth por teléfono + OTP, sesión
+      persistente, Splash → PhoneLogin/Publicaciones, verificación de identidad con
+      carnet (Storage privado + revisión admin), perfil con reputación y privacidad
+      (alias automático, revelación en chat).
 - [ ] **Fase 2 — Marketplace:** listado y detalle con Postgrest + Storage/Coil.
 - [ ] **Fase 3 — Chat:** Realtime, conversaciones y mensajes.
 - [ ] **Fase 4 — Subastas y apuestas:** pujas, validación de saldo y reglas peer-to-peer.

@@ -12,7 +12,8 @@ fun ProfileRow.toDomain(): Profile = Profile(
     privacyLevel = privacyLevel,
     bio = bio,
     reputationAvg = reputationAvg,
-    reviewsCount = reviewsCount
+    reviewsCount = reviewsCount,
+    defaultRevealPolicy = defaultRevealPolicy
 )
 
 fun Profile.toRow(): ProfileRow = ProfileRow(
@@ -24,5 +25,6 @@ fun Profile.toRow(): ProfileRow = ProfileRow(
     privacyLevel = privacyLevel,
     bio = bio,
     reputationAvg = reputationAvg,
-    reviewsCount = reviewsCount
+    reviewsCount = reviewsCount,
+    defaultRevealPolicy = defaultRevealPolicy
 )

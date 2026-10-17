@@ -7,10 +7,18 @@
 roles `anon`, `authenticated`, `service_role`). No se debe ejecutar dos veces ni sobre un
 esquema previo con tablas homónimas.
 
+`migrations/002_auth_identity_privacy.sql` añade las reglas del módulo de autenticación y
+perfiles (Fase 1): estados `pending/approved/rejected` de `identity_verifications`,
+`profiles.default_reveal_policy`, alias automático para perfiles anónimos, trigger de
+reputación sobre `reviews`, promoción de cuenta al confirmar teléfono/aprobar identidad y
+el bucket privado `identity-docs` con políticas por carpeta `<auth.uid()>/`. Se ejecuta una
+vez, después de la 001.
+
 Ejecutar desde el SQL Editor de Supabase como `postgres`, o con conexión administrativa:
 
 ```sh
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/001_initial_schema.sql
+psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/002_auth_identity_privacy.sql
 ```
 
 No poner la contraseña de PostgreSQL ni la service-role key en Android/local.properties.
@@ -129,11 +137,14 @@ npm ci --prefix supabase
 npm test --prefix supabase
 ```
 
-PGlite ejecuta PostgreSQL real embebido en WASM. Solo se simulan las funciones/tablas Auth
-y roles iniciales; la migración se ejecuta sin modificaciones. Las pruebas cubren RLS en
-las 16 tablas, acceso propio, visitante, participante, moderador, admin, miembros y no
-miembros, permisos de columnas, suplantación de roles, restricciones y precisión numeric. También comparan las columnas y los enums SQL con los
-nombres de wire de Kotlin para detectar divergencias.
+PGlite ejecuta PostgreSQL real embebido en WASM. Solo se simulan las funciones/tablas de
+Supabase Auth y el esquema `storage`; las migraciones se ejecutan sin modificaciones. Las
+pruebas cubren RLS en las 16 tablas, acceso propio, visitante, participante, moderador,
+admin, miembros y no miembros, permisos de columnas, suplantación de roles, restricciones y
+precisión numeric. También comparan las columnas y los enums SQL con los nombres de wire de
+Kotlin para detectar divergencias, y verifican las reglas de la Fase 1: aprobación/rechazo
+de identidad y su efecto en `users`, trigger de reputación, alias automático, política de
+revelación por defecto y el bucket privado de documentos.
 Esto no sustituye una prueba de integración en un proyecto Supabase antes de desplegar.
 
 ### JVM (requiere JDK 17, Android SDK 35 y dependencias Gradle)
