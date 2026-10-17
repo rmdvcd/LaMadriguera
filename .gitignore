@@ -1,0 +1,38 @@
+# Gradle
+.gradle/
+build/
+*/build/
+out/
+
+# Android Studio
+.idea/
+*.iml
+*.ipr
+*.iws
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.ap_
+*.aab
+*.apk
+
+# Kotlin
+.kotlin/
+
+# Hilt / KSP
+generated/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets - NUNCA commitear
+*.jks
+*.keystore
+google-services.json
+supabase.properties
+secrets.properties
+
+# Logs
+*.log

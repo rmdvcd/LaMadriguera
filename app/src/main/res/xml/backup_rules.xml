@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Excluye del auto-backup las preferencias y bases de datos:
+  contienen la sesión de Supabase (tokens JWT) cifrada con una clave local.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="database" path="." />
+</full-backup-content>
