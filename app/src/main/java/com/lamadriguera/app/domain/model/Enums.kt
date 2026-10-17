@@ -52,6 +52,16 @@ enum class ListingKind {
     @SerialName("request") REQUEST
 }
 
+/**
+ * Visibilidad de las demandas (kind = 'request').
+ * Las ofertas son siempre públicas; las demandas pueden restringirse solo a proveedores.
+ */
+@Serializable
+enum class ListingVisibility {
+    @SerialName("public") PUBLIC,
+    @SerialName("providers_only") PROVIDERS_ONLY
+}
+
 @Serializable
 enum class SaleMode {
     @SerialName("fixed") FIXED,
@@ -64,7 +74,23 @@ enum class ListingStatus {
     @SerialName("paused_payment") PAUSED_PAYMENT,
     @SerialName("auction_live") AUCTION_LIVE,
     @SerialName("awarded") AWARDED,
-    @SerialName("closed") CLOSED
+    @SerialName("closed") CLOSED,
+    @SerialName("fixed") FIXED,
+    @SerialName("auction_scheduled") AUCTION_SCHEDULED,
+    @SerialName("auction_ended") AUCTION_ENDED,
+    @SerialName("no_reserve_met") NO_RESERVE_MET,
+    @SerialName("expired") EXPIRED
+}
+
+/**
+ * Visibilidad del historial de pujas en una subasta.
+ * Si es [ALL], todos los usuarios pueden abrir BidHistoryScreen;
+ * si es [OWNER], solo el propietario ve las pujas.
+ */
+@Serializable
+enum class BidVisibility {
+    @SerialName("all") ALL,
+    @SerialName("owner") OWNER
 }
 
 @Serializable

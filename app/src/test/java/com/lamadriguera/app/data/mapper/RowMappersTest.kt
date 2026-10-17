@@ -95,7 +95,9 @@ class RowMappersTest {
             auctionConfig = SupabaseJson.parseToJsonElement("""{"ends_at":"2026-11-01T00:00:00Z","reserve":12.50}""") as kotlinx.serialization.json.JsonObject,
             status = ListingStatus.ACTIVE,
             boostedUntil = "2026-10-17T12:30:00Z",
-            createdAt = "2026-10-17T12:30:00Z"
+            createdAt = "2026-10-17T12:30:00Z",
+            photoUrl = "https://placeholder.supabase.co/storage/v1/object/public/listing-photos/u/1.jpg",
+            visibility = ListingVisibility.PUBLIC
         )
         val domain = row.toDomain()
         assertEquals(row, domain.toRow())

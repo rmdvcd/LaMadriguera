@@ -57,29 +57,125 @@
     <string name="identity_status_rejected_desc">Revisa tus datos y vuelve a enviar la solicitud.</string>
     <string name="identity_resubmit">Volver a enviar</string>
 
-    <!-- Pantallas (títulos usados por placeholders y futuras pantallas) -->
+    <!-- Pantallas (títulos usados por placeholders y pantallas) -->
     <string name="screen_splash">Verificando sesión</string>
     <string name="screen_listing_detail">Detalle de publicación</string>
     <string name="screen_edit_listing">Editar publicación</string>
     <string name="screen_auction_detail">Detalle de subasta</string>
     <string name="screen_create_auction">Crear subasta</string>
+    <string name="screen_auction_config">Configurar subasta</string>
+    <string name="screen_bid_history">Historial de pujas</string>
     <string name="screen_chat_thread">Conversación</string>
     <string name="screen_bet_detail">Detalle de apuesta</string>
     <string name="screen_create_bet">Crear apuesta</string>
     <string name="screen_transactions">Historial de transacciones</string>
     <string name="screen_report_detail">Detalle de reporte</string>
 
-    <!-- Publicaciones -->
+    <!-- Publicaciones (Listings) -->
     <string name="listings_title">Publicaciones</string>
     <string name="listings_create">Crear publicación</string>
+    <string name="listings_edit">Editar publicación</string>
     <string name="listings_search_hint">Buscar productos o servicios…</string>
-    <string name="listings_empty">No hay publicaciones disponibles</string>
+    <string name="listings_empty">No hay publicaciones que coincidan con tu búsqueda</string>
+    <string name="listings_filter_all">Todos</string>
+    <string name="listings_filter_offers">Ofertas</string>
+    <string name="listings_filter_requests">Demandas</string>
+    <string name="listings_filter_municipality_all">Todos los municipios</string>
+    <string name="listings_filter_category_all">Todas las categorías</string>
+    <string name="listings_kind_offer">Oferta</string>
+    <string name="listings_kind_request">Demanda</string>
+    <string name="listings_badge_boosted">Destacado ×1.3</string>
+    <string name="listings_badge_auction">Subasta</string>
+    <string name="listings_badge_providers_only">Solo proveedores</string>
+    <string name="listings_price_negotiable">A convenir</string>
+    <string name="listings_price_format">%1$s %2$s</string>
+    <string name="listings_radius_format">Radio: %1$d km</string>
+    <string name="listings_score_format">Relevancia: %1$d%%</string>
 
-    <!-- Subastas -->
+    <!-- Formulario Crear/Editar Listing -->
+    <string name="listing_form_kind_label">Tipo de publicación</string>
+    <string name="listing_form_title_label">Título</string>
+    <string name="listing_form_description_label">Descripción</string>
+    <string name="listing_form_category_label">Categoría</string>
+    <string name="listing_form_price_label">Precio (CUP)</string>
+    <string name="listing_form_price_negotiable_label">Precio a convenir</string>
+    <string name="listing_form_municipality_label">Municipio</string>
+    <string name="listing_form_radius_label">Radio de cobertura (%1$d km)</string>
+    <string name="listing_form_photo_label">Foto opcional (máx. 1 MB, compresión automática)</string>
+    <string name="listing_form_photo_select">Elegir foto</string>
+    <string name="listing_form_photo_remove">Quitar foto</string>
+    <string name="listing_form_photo_compressed_info">Imagen comprimida lista (%1$d KB / máx 1024 KB)</string>
+    <string name="listing_form_privacy_label">Privacidad del anunciante</string>
+    <string name="listing_form_visibility_label">Visibilidad de la demanda</string>
+    <string name="listing_form_visibility_public">Pública (todos los usuarios)</string>
+    <string name="listing_form_visibility_providers">Solo proveedores</string>
+    <string name="listing_form_allow_auction_label">¿Permitir subasta?</string>
+    <string name="listing_form_allow_auction_desc">Activa el modo subasta con precio inicial, incremento y cierre automático.</string>
+    <string name="listing_form_edit_auction_config">Configurar subasta</string>
+    <string name="listing_form_submit_offer">Publicar oferta</string>
+    <string name="listing_form_submit_request">Publicar demanda</string>
+    <string name="listing_form_save_changes">Guardar cambios</string>
+
+    <!-- Subastas (Modo Subasta, Detalle, Configuración e Historial) -->
     <string name="auction_title">Subastas</string>
     <string name="auction_bid">Pujar</string>
-    <string name="auction_current_bid">Puja actual</string>
+    <string name="auction_current_bid">Última puja</string>
+    <string name="auction_no_bids_yet">Sin pujas aún</string>
+    <string name="auction_starting_price">Precio inicial</string>
+    <string name="auction_min_increment">Incremento mínimo</string>
+    <string name="auction_min_next_bid">Puja mínima requerida: %1$s %2$s</string>
+    <string name="auction_reserve_price">Precio de reserva (opcional)</string>
+    <string name="auction_reserve_met">Reserva alcanzada</string>
+    <string name="auction_reserve_not_met">Reserva pendiente</string>
+    <string name="auction_time_remaining">Tiempo restante</string>
+    <string name="auction_starts_in">Comienza en</string>
+    <string name="auction_ended_label">Subasta finalizada</string>
     <string name="auction_ending_soon">Termina pronto</string>
+    <string name="auction_user_bids_remaining">Tus pujas en esta subasta: %1$d / 3</string>
+    <string name="auction_bid_amount_label">Tu puja (%1$s)</string>
+    <string name="auction_place_bid_button">Realizar puja</string>
+    <string name="auction_view_bid_history">Ver historial de pujas (%1$d)</string>
+    <string name="auction_edit_config_button">Editar configuración de subasta</string>
+    <string name="auction_close_now_button">Cerrar y resolver subasta</string>
+    <string name="auction_identity_required_badge">Requiere identidad verificada</string>
+    <string name="auction_dispute_warning">No puedes pujar mientras tengas una disputa abierta.</string>
+    <string name="auction_identity_warning">Esta subasta requiere verificación de identidad (verification_level = identity).</string>
+    <string name="auction_max_bids_warning">Has alcanzado el máximo de 3 pujas en esta subasta.</string>
+
+    <!-- Estados de subasta -->
+    <string name="auction_state_fixed">Precio fijo</string>
+    <string name="auction_state_scheduled">Subasta programada</string>
+    <string name="auction_state_live">Subasta en vivo</string>
+    <string name="auction_state_ended">Subasta concluida</string>
+    <string name="auction_state_awarded">Adjudicada</string>
+    <string name="auction_state_no_reserve_met">Reserva no alcanzada (sin adjudicar)</string>
+    <string name="auction_state_expired">Expirada sin pujas</string>
+
+    <!-- AuctionConfigScreen -->
+    <string name="auction_config_title">Configuración de subasta</string>
+    <string name="auction_config_subtitle">Define las reglas de precio, horarios y visibilidad de las pujas. Solo puedes editarla mientras no haya pujas.</string>
+    <string name="auction_config_starting_price">Precio inicial (&gt; 0)</string>
+    <string name="auction_config_min_increment">Incremento mínimo (&gt; 0)</string>
+    <string name="auction_config_reserve_price">Precio de reserva (opcional)</string>
+    <string name="auction_config_starts_at">Inicio (ISO-8601 o selector)</string>
+    <string name="auction_config_ends_at">Fin (posterior al inicio)</string>
+    <string name="auction_config_auto_extend">Auto-extensión al final (minutos, por defecto 2)</string>
+    <string name="auction_config_requires_identity">Exigir identidad verificada para pujar</string>
+    <string name="auction_config_requires_identity_desc">Obligatorio en subastas con dinero para prevenir fraude.</string>
+    <string name="auction_config_visible_bids_label">Visibilidad del historial de pujas</string>
+    <string name="auction_config_visible_all">Público para todos (all)</string>
+    <string name="auction_config_visible_owner">Solo visible para el dueño (owner)</string>
+    <string name="auction_config_locked_notice">Esta configuración no se puede editar porque ya existen pujas o no eres el propietario.</string>
+    <string name="auction_config_save">Aplicar configuración</string>
+
+    <!-- BidHistoryScreen -->
+    <string name="bid_history_title">Historial de pujas</string>
+    <string name="bid_history_empty">Todavía no se han registrado pujas en esta subasta.</string>
+    <string name="bid_history_restricted">El historial de pujas está configurado como privado para el propietario (visible_bids = owner).</string>
+    <string name="bid_status_winning">Ganadora</string>
+    <string name="bid_status_valid">Válida</string>
+    <string name="bid_status_losing">Superada</string>
+    <string name="bid_status_retracted">Retirada</string>
 
     <!-- Chat -->
     <string name="chat_title">Conversaciones</string>

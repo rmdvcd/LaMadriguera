@@ -30,6 +30,8 @@ sealed interface Destinations {
     @Serializable data object Auctions : Destinations
     @Serializable data class AuctionDetail(val auctionId: String) : Destinations
     @Serializable data object CreateAuction : Destinations
+    @Serializable data class AuctionConfig(val listingId: String? = null) : Destinations
+    @Serializable data class BidHistory(val listingId: String) : Destinations
 
     // --- Chat ---
     @Serializable data object Conversations : Destinations

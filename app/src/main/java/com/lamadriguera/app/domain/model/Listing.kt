@@ -22,5 +22,11 @@ data class Listing(
     val auctionConfig: JsonObject? = null,
     val status: ListingStatus = ListingStatus.ACTIVE,
     val boostedUntil: Instant? = null,
-    val createdAt: Instant
-)
+    val createdAt: Instant,
+    val photoUrl: String? = null,
+    val visibility: ListingVisibility = ListingVisibility.PUBLIC
+) {
+    /** Configuración tipada de subasta decodificada desde [auctionConfig]. */
+    val parsedAuctionConfig: AuctionConfig?
+        get() = AuctionConfigCodec.decodeOrNull(auctionConfig)
+}

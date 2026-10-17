@@ -27,12 +27,23 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.lamadriguera.app.R
 import com.lamadriguera.app.core.result.UiState
+import com.lamadriguera.app.domain.model.SaleMode
+import com.lamadriguera.app.feature.auction.AuctionConfigScreen
+import com.lamadriguera.app.feature.auction.AuctionConfigViewModel
+import com.lamadriguera.app.feature.auction.BidHistoryScreen
+import com.lamadriguera.app.feature.auction.BidHistoryViewModel
 import com.lamadriguera.app.feature.auth.IdentityVerificationScreen
 import com.lamadriguera.app.feature.auth.IdentityVerificationViewModel
 import com.lamadriguera.app.feature.auth.PhoneLoginScreen
 import com.lamadriguera.app.feature.auth.PhoneLoginViewModel
 import com.lamadriguera.app.feature.auth.SplashScreen
 import com.lamadriguera.app.feature.auth.SplashViewModel
+import com.lamadriguera.app.feature.listings.CreateListingScreen
+import com.lamadriguera.app.feature.listings.CreateListingViewModel
+import com.lamadriguera.app.feature.listings.ListingDetailScreen
+import com.lamadriguera.app.feature.listings.ListingDetailViewModel
+import com.lamadriguera.app.feature.listings.ListingsScreen
+import com.lamadriguera.app.feature.listings.ListingsViewModel
 import com.lamadriguera.app.feature.profile.PrivacySettingsScreen
 import com.lamadriguera.app.feature.profile.PrivacySettingsViewModel
 import com.lamadriguera.app.feature.profile.ProfileScreen
@@ -47,9 +58,7 @@ import com.lamadriguera.app.ui.components.LoadingState
  *
  * El arranque pasa por [Destinations.Splash], que resuelve la sesión con
  * [com.lamadriguera.app.domain.repository.AuthRepository] y navega a
- * PhoneLogin o Publicaciones. Los flujos de autenticación, verificación de
- * identidad, perfil y privacidad están implementados; el resto de destinos
- * renderiza un placeholder.
+ * PhoneLogin o Publicaciones.
  *
  * Ningún Composable llama a Supabase directamente.
  */
@@ -138,29 +147,240 @@ fun LaMadrigueraNavGraph(
                 PlaceholderScreen(R.string.nav_home)
             }
 
-            // Marketplace
+            // Marketplace (Listings)
             composable<Destinations.Listings> {
-                PlaceholderScreen(R.string.nav_listings)
+                val viewModel: ListingsViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                ListingsScreen(
+                    state = state,
+                    onQueryChanged = viewModel::onQueryChanged,
+                    onMunicipalitySelected = viewModel::onMunicipalitySelected,
+                    onCategorySelected = viewModel::onCategorySelected,
+                    onKindSelected = viewModel::onKindSelected,
+                    onOpenListing = { id ->
+                        navController.navigate(Destinations.ListingDetail(id))
+                    },
+                    onCreateListing = {
+                        navController.navigate(Destinations.CreateListing)
+                    },
+                    onRetry = viewModel::refresh
+                )
             }
             composable<Destinations.ListingDetail> {
-                PlaceholderScreen(R.string.screen_listing_detail)
+                val viewModel: ListingDetailViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                ListingDetailScreen(
+                    state = state,
+                    onBidAmountChanged = viewModel::onBidAmountChanged,
+                    onPlaceBid = viewModel::placeBid,
+                    onCloseAuction = viewModel::closeAuction,
+                    onOpenBidHistory = { id ->
+                        navController.navigate(Destinations.BidHistory(id))
+                    },
+                    onOpenAuctionConfig = { id ->
+                        navController.navigate(Destinations.AuctionConfig(id))
+                    },
+                    onEditListing = { id ->
+                        navController.navigate(Destinations.EditListing(id))
+                    },
+                    onOpenIdentityVerification = {
+                        navController.navigate(Destinations.IdentityVerification)
+                    },
+                    onRetry = viewModel::refresh
+                )
             }
             composable<Destinations.CreateListing> {
-                PlaceholderScreen(R.string.listings_create)
+                val viewModel: CreateListingViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                CreateListingScreen(
+                    state = state,
+                    onKindChanged = viewModel::onKindChanged,
+                    onTitleChanged = viewModel::onTitleChanged,
+                    onDescriptionChanged = viewModel::onDescriptionChanged,
+                    onCategorySelected = viewModel::onCategorySelected,
+                    onPriceChanged = viewModel::onPriceChanged,
+                    onPriceNegotiableChanged = viewModel::onPriceNegotiableChanged,
+                    onMunicipalitySelected = viewModel::onMunicipalitySelected,
+                    onRadiusChanged = viewModel::onRadiusChanged,
+                    onPrivacyLevelChanged = viewModel::onPrivacyLevelChanged,
+                    onVisibilityChanged = viewModel::onVisibilityChanged,
+                    onPhotoSelected = viewModel::onPhotoSelected,
+                    onPhotoRemoved = viewModel::onPhotoRemoved,
+                    onAllowAuctionChanged = viewModel::onAllowAuctionChanged,
+                    onOpenAuctionConfig = viewModel::openAuctionConfigScreen,
+                    onCloseAuctionConfig = viewModel::closeAuctionConfigScreen,
+                    onAuctionStartingPriceChanged = viewModel::onAuctionStartingPriceChanged,
+                    onAuctionMinIncrementChanged = viewModel::onAuctionMinIncrementChanged,
+                    onAuctionReservePriceChanged = viewModel::onAuctionReservePriceChanged,
+                    onAuctionStartsAtChanged = viewModel::onAuctionStartsAtChanged,
+                    onAuctionEndsAtChanged = viewModel::onAuctionEndsAtChanged,
+                    onAuctionAutoExtendChanged = viewModel::onAuctionAutoExtendChanged,
+                    onAuctionRequiresIdentityChanged = viewModel::onAuctionRequiresIdentityChanged,
+                    onAuctionVisibleBidsChanged = viewModel::onAuctionVisibleBidsChanged,
+                    onConfirmAuctionConfig = viewModel::confirmAuctionConfig,
+                    onSubmit = viewModel::submit
+                )
+                LaunchedEffect(state.savedListing?.id) {
+                    val savedId = state.savedListing?.id
+                    if (savedId != null) {
+                        navController.navigate(Destinations.ListingDetail(savedId)) {
+                            popUpTo<Destinations.CreateListing> { inclusive = true }
+                        }
+                    }
+                }
             }
             composable<Destinations.EditListing> {
-                PlaceholderScreen(R.string.screen_edit_listing)
+                val viewModel: CreateListingViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                CreateListingScreen(
+                    state = state,
+                    onKindChanged = viewModel::onKindChanged,
+                    onTitleChanged = viewModel::onTitleChanged,
+                    onDescriptionChanged = viewModel::onDescriptionChanged,
+                    onCategorySelected = viewModel::onCategorySelected,
+                    onPriceChanged = viewModel::onPriceChanged,
+                    onPriceNegotiableChanged = viewModel::onPriceNegotiableChanged,
+                    onMunicipalitySelected = viewModel::onMunicipalitySelected,
+                    onRadiusChanged = viewModel::onRadiusChanged,
+                    onPrivacyLevelChanged = viewModel::onPrivacyLevelChanged,
+                    onVisibilityChanged = viewModel::onVisibilityChanged,
+                    onPhotoSelected = viewModel::onPhotoSelected,
+                    onPhotoRemoved = viewModel::onPhotoRemoved,
+                    onAllowAuctionChanged = viewModel::onAllowAuctionChanged,
+                    onOpenAuctionConfig = viewModel::openAuctionConfigScreen,
+                    onCloseAuctionConfig = viewModel::closeAuctionConfigScreen,
+                    onAuctionStartingPriceChanged = viewModel::onAuctionStartingPriceChanged,
+                    onAuctionMinIncrementChanged = viewModel::onAuctionMinIncrementChanged,
+                    onAuctionReservePriceChanged = viewModel::onAuctionReservePriceChanged,
+                    onAuctionStartsAtChanged = viewModel::onAuctionStartsAtChanged,
+                    onAuctionEndsAtChanged = viewModel::onAuctionEndsAtChanged,
+                    onAuctionAutoExtendChanged = viewModel::onAuctionAutoExtendChanged,
+                    onAuctionRequiresIdentityChanged = viewModel::onAuctionRequiresIdentityChanged,
+                    onAuctionVisibleBidsChanged = viewModel::onAuctionVisibleBidsChanged,
+                    onConfirmAuctionConfig = viewModel::confirmAuctionConfig,
+                    onSubmit = viewModel::submit
+                )
+                LaunchedEffect(state.savedListing?.id) {
+                    val savedId = state.savedListing?.id
+                    if (savedId != null) {
+                        navController.popBackStack()
+                    }
+                }
             }
 
             // Subastas
             composable<Destinations.Auctions> {
-                PlaceholderScreen(R.string.nav_auction)
+                val viewModel: ListingsViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(Unit) {
+                    if (state.selectedSaleMode != SaleMode.AUCTION) {
+                        viewModel.onSaleModeSelected(SaleMode.AUCTION)
+                    }
+                }
+                ListingsScreen(
+                    state = state,
+                    onQueryChanged = viewModel::onQueryChanged,
+                    onMunicipalitySelected = viewModel::onMunicipalitySelected,
+                    onCategorySelected = viewModel::onCategorySelected,
+                    onKindSelected = viewModel::onKindSelected,
+                    onOpenListing = { id ->
+                        navController.navigate(Destinations.ListingDetail(id))
+                    },
+                    onCreateListing = {
+                        navController.navigate(Destinations.CreateListing)
+                    },
+                    onRetry = viewModel::refresh
+                )
             }
             composable<Destinations.AuctionDetail> {
-                PlaceholderScreen(R.string.screen_auction_detail)
+                val viewModel: ListingDetailViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                ListingDetailScreen(
+                    state = state,
+                    onBidAmountChanged = viewModel::onBidAmountChanged,
+                    onPlaceBid = viewModel::placeBid,
+                    onCloseAuction = viewModel::closeAuction,
+                    onOpenBidHistory = { id ->
+                        navController.navigate(Destinations.BidHistory(id))
+                    },
+                    onOpenAuctionConfig = { id ->
+                        navController.navigate(Destinations.AuctionConfig(id))
+                    },
+                    onEditListing = { id ->
+                        navController.navigate(Destinations.EditListing(id))
+                    },
+                    onOpenIdentityVerification = {
+                        navController.navigate(Destinations.IdentityVerification)
+                    },
+                    onRetry = viewModel::refresh
+                )
             }
             composable<Destinations.CreateAuction> {
-                PlaceholderScreen(R.string.screen_create_auction)
+                val viewModel: CreateListingViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(Unit) {
+                    if (!state.allowAuction) {
+                        viewModel.onAllowAuctionChanged(true)
+                    }
+                }
+                CreateListingScreen(
+                    state = state,
+                    onKindChanged = viewModel::onKindChanged,
+                    onTitleChanged = viewModel::onTitleChanged,
+                    onDescriptionChanged = viewModel::onDescriptionChanged,
+                    onCategorySelected = viewModel::onCategorySelected,
+                    onPriceChanged = viewModel::onPriceChanged,
+                    onPriceNegotiableChanged = viewModel::onPriceNegotiableChanged,
+                    onMunicipalitySelected = viewModel::onMunicipalitySelected,
+                    onRadiusChanged = viewModel::onRadiusChanged,
+                    onPrivacyLevelChanged = viewModel::onPrivacyLevelChanged,
+                    onVisibilityChanged = viewModel::onVisibilityChanged,
+                    onPhotoSelected = viewModel::onPhotoSelected,
+                    onPhotoRemoved = viewModel::onPhotoRemoved,
+                    onAllowAuctionChanged = viewModel::onAllowAuctionChanged,
+                    onOpenAuctionConfig = viewModel::openAuctionConfigScreen,
+                    onCloseAuctionConfig = viewModel::closeAuctionConfigScreen,
+                    onAuctionStartingPriceChanged = viewModel::onAuctionStartingPriceChanged,
+                    onAuctionMinIncrementChanged = viewModel::onAuctionMinIncrementChanged,
+                    onAuctionReservePriceChanged = viewModel::onAuctionReservePriceChanged,
+                    onAuctionStartsAtChanged = viewModel::onAuctionStartsAtChanged,
+                    onAuctionEndsAtChanged = viewModel::onAuctionEndsAtChanged,
+                    onAuctionAutoExtendChanged = viewModel::onAuctionAutoExtendChanged,
+                    onAuctionRequiresIdentityChanged = viewModel::onAuctionRequiresIdentityChanged,
+                    onAuctionVisibleBidsChanged = viewModel::onAuctionVisibleBidsChanged,
+                    onConfirmAuctionConfig = viewModel::confirmAuctionConfig,
+                    onSubmit = viewModel::submit
+                )
+            }
+            composable<Destinations.AuctionConfig> {
+                val viewModel: AuctionConfigViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                AuctionConfigScreen(
+                    state = state,
+                    onStartingPriceChanged = viewModel::onStartingPriceChanged,
+                    onMinIncrementChanged = viewModel::onMinIncrementChanged,
+                    onReservePriceChanged = viewModel::onReservePriceChanged,
+                    onStartsAtChanged = viewModel::onStartsAtChanged,
+                    onEndsAtChanged = viewModel::onEndsAtChanged,
+                    onAutoExtendMinutesChanged = viewModel::onAutoExtendMinutesChanged,
+                    onRequiresIdentityChanged = viewModel::onRequiresIdentityChanged,
+                    onVisibleBidsChanged = viewModel::onVisibleBidsChanged,
+                    onSave = viewModel::saveConfiguration,
+                    onCancel = { navController.popBackStack() }
+                )
+                LaunchedEffect(state.savedListing?.id) {
+                    if (state.savedListing != null) {
+                        navController.popBackStack()
+                    }
+                }
+            }
+            composable<Destinations.BidHistory> {
+                val viewModel: BidHistoryViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                BidHistoryScreen(
+                    state = state,
+                    onRetry = viewModel::refresh
+                )
             }
 
             // Chat
@@ -306,6 +526,8 @@ private fun NavDestination.topBarTitleRes(): Int = when {
     hasRoute<Destinations.Auctions>() -> R.string.nav_auction
     hasRoute<Destinations.AuctionDetail>() -> R.string.screen_auction_detail
     hasRoute<Destinations.CreateAuction>() -> R.string.screen_create_auction
+    hasRoute<Destinations.AuctionConfig>() -> R.string.screen_auction_config
+    hasRoute<Destinations.BidHistory>() -> R.string.screen_bid_history
     hasRoute<Destinations.Conversations>() -> R.string.nav_chat
     hasRoute<Destinations.ChatThread>() -> R.string.screen_chat_thread
     hasRoute<Destinations.BettingHub>() -> R.string.nav_betting
