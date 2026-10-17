@@ -61,6 +61,7 @@ fun ListingDetailScreen(
     onOpenAuctionConfig: (String) -> Unit,
     onEditListing: (String) -> Unit,
     onOpenIdentityVerification: () -> Unit,
+    onContactSeller: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -196,6 +197,15 @@ fun ListingDetailScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(stringResource(R.string.listings_edit))
+                    }
+                } else {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedButton(
+                        onClick = onContactSeller,
+                        enabled = !state.isOpeningChat,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.listing_contact_seller))
                     }
                 }
             }

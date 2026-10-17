@@ -27,5 +27,8 @@ data class ProfileRow(
     @SerialName("reviews_count")
     val reviewsCount: Int = 0,
     @SerialName("default_reveal_policy")
-    val defaultRevealPolicy: RevealPolicy = RevealPolicy.NEVER
+    val defaultRevealPolicy: RevealPolicy = RevealPolicy.NEVER,
+    /** Clave pública X25519 de chat (bytea hex). La usa el diseño C del chat. */
+    @SerialName("chat_public_key")
+    val chatPublicKey: String? = null
 )

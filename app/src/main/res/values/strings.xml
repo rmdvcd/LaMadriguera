@@ -88,6 +88,7 @@
     <string name="listings_badge_auction">Subasta</string>
     <string name="listings_badge_providers_only">Solo proveedores</string>
     <string name="listings_price_negotiable">A convenir</string>
+    <string name="listing_contact_seller">Contactar por chat cifrado</string>
     <string name="listings_price_format">%1$s %2$s</string>
     <string name="listings_radius_format">Radio: %1$d km</string>
     <string name="listings_score_format">Relevancia: %1$d%%</string>
@@ -182,6 +183,38 @@
     <string name="chat_empty">No tienes conversaciones</string>
     <string name="chat_type_message">Escribe un mensaje…</string>
     <string name="chat_send">Enviar</string>
+    <string name="chat_conversation_with">Conversación %1$s</string>
+    <string name="chat_unread_badge">%1$d mensajes sin leer</string>
+    <string name="chat_encrypted_note">Cifrado de extremo a extremo activo en este dispositivo.</string>
+    <string name="chat_badge_dispute">En disputa</string>
+    <string name="chat_dispute_banner">Este hilo está en disputa. Un moderador podría descifrarlo.</string>
+    <string name="chat_undecryptable">Mensaje cifrado: no disponible en este dispositivo</string>
+    <string name="chat_expired_message">Mensaje autodestruido</string>
+    <string name="chat_attach_image">Adjuntar imagen (máx. 1 MB)</string>
+    <string name="chat_attach_audio">Adjuntar audio (máx. 1 MB)</string>
+    <string name="chat_attach_location">Compartir ubicación</string>
+    <string name="chat_locating">Obteniendo ubicación…</string>
+    <string name="chat_location_failed">No se pudo obtener la ubicación. Revisa el permiso y la señal.</string>
+    <string name="chat_expiry_label">Autodestrucción:</string>
+    <string name="chat_expiry_24h">24 h</string>
+    <string name="chat_expiry_7d">7 días</string>
+    <string name="chat_expiry_never">Nunca</string>
+    <string name="chat_expires_24h">Se autodestruye en 24 h</string>
+    <string name="chat_expires_7d">Se autodestruye en 7 días</string>
+    <string name="chat_audio_play">Reproducir</string>
+    <string name="chat_media_processing">Procesando adjunto…</string>
+    <string name="chat_personal_data_title">Estás compartiendo un dato personal</string>
+    <string name="chat_personal_data_body">Hemos detectado un posible número de teléfono o dato de contacto en tu mensaje. Está permitido, pero compártelo solo si estás seguro.</string>
+    <string name="chat_personal_data_send">Enviar igualmente</string>
+    <string name="chat_personal_data_edit">Editar mensaje</string>
+    <string name="chat_report">Reportar conversación</string>
+    <string name="chat_report_title">Reportar conversación</string>
+    <string name="chat_report_reason_hint">Motivo del reporte…</string>
+    <string name="chat_report_body">Al reportar se abre un ticket de disputa. Tu hilo será descifrado por un moderador (admin general + moderador senior actuando juntos) y esa acción quedará registrada. ¿Continuar?</string>
+    <string name="chat_report_submit">Abrir disputa</string>
+    <string name="chat_report_done">Disputa abierta: tu hilo será descifrado por un moderador.</string>
+    <string name="chat_thread_decrypted_notice">Tu hilo fue descifrado por un moderador</string>
+    <string name="chat_got_it">Entendido</string>
 
     <!-- Apuestas -->
     <string name="betting_title">Apuestas</string>

@@ -23,12 +23,22 @@ primera puja, reglas de seguridad en pujas (`verification_level='identity'` cuan
 abierta, auto-extensión), las funciones RPC `place_auction_bid`, `close_auction` y
 `close_due_auctions` y el bucket `listing-photos`.
 
+`migrations/004_chat_encryption_disputes.sql` añade el chat cifrado (diseño C) y el flujo
+de disputa: `profiles.chat_public_key` (X25519 por dispositivo), `conversation_keys`
+(sobres de sesión por participante), `dispute_tickets` + `report_conversation()` y
+`resolve_dispute_ticket()` (reportar abre ticket y marca el hilo `disputed`),
+`purge_expired_messages()` (elimina el ciphertext vencido; solo `service_role`),
+`moderation_actions` estrictamente append-only (logs de descifrado inmutables con quién,
+cuándo, ticket y motivo), `user_notifications` + `notify_thread_decrypted()` (aviso a
+ambas partes) y `dispute_transcripts` (transcripción del descifrado, solo moderación).
+
 Ejecutar desde el SQL Editor de Supabase como `postgres`, o con conexión administrativa:
 
 ```sh
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/001_initial_schema.sql
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/002_auth_identity_privacy.sql
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/003_listings_auctions.sql
+psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/004_chat_encryption_disputes.sql
 ```
 
 No poner la contraseña de PostgreSQL ni la service-role key en Android/local.properties.
@@ -60,6 +70,39 @@ Los IDs se pueden generar con `UUID.randomUUID().toString()`; `profiles` usa `us
   impediría falsificar `verification_level`, `boosted_until` o confirmaciones de pago.
 - La service role omite RLS: se utiliza exclusivamente en un backend confiable, con sus
   propias comprobaciones de autorización y auditoría. No es la identidad del usuario.
+
+## Chat cifrado (diseño C)
+
+- Cada conversación tiene una `session_key` AES-256-GCM generada en el cliente. Los
+  mensajes (texto, imagen, audio, ubicación) se cifran en el cliente con AAD
+  `msg:<conversationId>:<tipo>` y viajan como ciphertext en `messages.content_ref`
+  (formato `v1.` + base64 de `iv || ct || tag`).
+- La `session_key` se envuelve con la clave pública X25519 de disputa del hilo
+  (sobre ECIES: `0x01 || clave_pub_efímera || iv || ct || tag`, HKDF-SHA256 con
+  propósito `lmchat/wrap/dispute/v1`) y se guarda en `conversations.session_key_wrapped`.
+- La clave privada de disputa se divide XOR en dos mitades; cada mitad se envuelve a su
+  custodio (`lmchat/wrap/custodian/v1`): `dispute_key_split_a` al admin general y
+  `dispute_key_split_b` al moderador senior. Ninguna mitad revela nada por separado
+  (one-time pad); hace falta el quórum 2-de-2.
+- Además la sesión se envuelve por participante (`conversation_keys`, propósito
+  `lmchat/wrap/session/v1`) para que ambos usuarios descifren su hilo sin tocar el
+  material de disputa. La privada de identidad nunca sale del dispositivo
+  (EncryptedSharedPreferences).
+- La app nunca descifra hilos ajenos ni usa las mitades de custodia. Al reportar una
+  conversación (`report_conversation`) se abre el ticket; un moderador lo aprueba
+  (`resolve_dispute_ticket`) y el proceso backend `functions/dispute-decrypt` — con las
+  dos privadas de custodia como secretos separados — desenvuelve las mitades, recombina
+  la privada de disputa y descifra SOLO esa conversación, registrándolo de forma
+  inmutable en `moderation_actions` (actor, ticket, motivo), exportando la transcripción
+  para moderación y notificando a ambas partes.
+- Autodestrucción: `expires_at` (24 h / 7 d) hace que el cliente descarte el ciphertext
+  al instante y `purge_expired_messages()` elimina la fila en el servidor (solo
+  `service_role`, p. ej. vía `pg_cron`).
+
+Las claves públicas de custodia se configuran con `DISPUTE_ADMIN_PUB` /
+`DISPUTE_MODERATOR_PUB` (local.properties o `-P`). Sin ellas se usa el par de desarrollo
+embebido en `DisputeKeyConfig`, cuyas privadas son públicas a propósito: nunca usarlas
+en producción.
 
 ## Kotlin
 
