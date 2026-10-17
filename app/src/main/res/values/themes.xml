@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Tema base de la app (Compose pinta el resto). -->
+    <style name="Theme.LaMadriguera" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/surface_light</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!-- Tema del splash (core-splashscreen). Tras él se aplica Theme.LaMadriguera. -->
+    <style name="Theme.LaMadriguera.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.LaMadriguera</item>
+    </style>
+
+</resources>

@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">La Madriguera</string>
+    <string name="app_tagline">Marketplace y apuestas peer-to-peer para Cuba</string>
+
+    <!-- Navegación -->
+    <string name="nav_home">Inicio</string>
+    <string name="nav_listings">Publicaciones</string>
+    <string name="nav_auction">Subastas</string>
+    <string name="nav_chat">Mensajes</string>
+    <string name="nav_betting">Apuestas</string>
+    <string name="nav_profile">Perfil</string>
+    <string name="nav_payments">Pagos</string>
+    <string name="nav_moderation">Moderación</string>
+
+    <!-- Autenticación -->
+    <string name="auth_login">Iniciar sesión</string>
+    <string name="auth_register">Crear cuenta</string>
+    <string name="auth_logout">Cerrar sesión</string>
+    <string name="auth_email">Correo electrónico</string>
+    <string name="auth_password">Contraseña</string>
+    <string name="auth_forgot_password">Recuperar contraseña</string>
+    <string name="auth_no_account">¿No tienes cuenta?</string>
+    <string name="auth_has_account">¿Ya tienes cuenta?</string>
+
+    <!-- Pantallas (títulos usados por placeholders y futuras pantallas) -->
+    <string name="screen_splash">Verificando sesión</string>
+    <string name="screen_listing_detail">Detalle de publicación</string>
+    <string name="screen_edit_listing">Editar publicación</string>
+    <string name="screen_auction_detail">Detalle de subasta</string>
+    <string name="screen_create_auction">Crear subasta</string>
+    <string name="screen_chat_thread">Conversación</string>
+    <string name="screen_bet_detail">Detalle de apuesta</string>
+    <string name="screen_create_bet">Crear apuesta</string>
+    <string name="screen_transactions">Historial de transacciones</string>
+    <string name="screen_report_detail">Detalle de reporte</string>
+
+    <!-- Publicaciones -->
+    <string name="listings_title">Publicaciones</string>
+    <string name="listings_create">Crear publicación</string>
+    <string name="listings_search_hint">Buscar productos o servicios…</string>
+    <string name="listings_empty">No hay publicaciones disponibles</string>
+
+    <!-- Subastas -->
+    <string name="auction_title">Subastas</string>
+    <string name="auction_bid">Pujar</string>
+    <string name="auction_current_bid">Puja actual</string>
+    <string name="auction_ending_soon">Termina pronto</string>
+
+    <!-- Chat -->
+    <string name="chat_title">Conversaciones</string>
+    <string name="chat_empty">No tienes conversaciones</string>
+    <string name="chat_type_message">Escribe un mensaje…</string>
+    <string name="chat_send">Enviar</string>
+
+    <!-- Apuestas -->
+    <string name="betting_title">Apuestas</string>
+    <string name="betting_place_bet">Apostar</string>
+    <string name="betting_odds">Cuota</string>
+    <string name="betting_my_bets">Mis apuestas</string>
+
+    <!-- Pagos -->
+    <string name="payments_title">Pagos y saldo</string>
+    <string name="payments_balance">Saldo</string>
+    <string name="payments_deposit">Recargar</string>
+    <string name="payments_withdraw">Retirar</string>
+
+    <!-- Perfil -->
+    <string name="profile_title">Mi perfil</string>
+    <string name="profile_edit">Editar perfil</string>
+    <string name="profile_settings">Configuración</string>
+
+    <!-- Moderación -->
+    <string name="moderation_title">Centro de moderación</string>
+    <string name="moderation_reports">Reportes</string>
+
+    <!-- Común -->
+    <string name="common_loading">Cargando…</string>
+    <string name="common_error">Ha ocurrido un error</string>
+    <string name="common_retry">Reintentar</string>
+    <string name="common_cancel">Cancelar</string>
+    <string name="common_confirm">Confirmar</string>
+    <string name="common_save">Guardar</string>
+    <string name="common_delete">Eliminar</string>
+    <string name="common_search">Buscar</string>
+    <string name="common_continue">Continuar</string>
+    <string name="common_back">Atrás</string>
+    <string name="common_next">Siguiente</string>
+    <string name="common_empty">Sin contenido</string>
+    <string name="common_coming_soon">Próximamente</string>
+    <string name="common_no_internet">Sin conexión a internet</string>
+
+    <!-- Placeholder del esqueleto -->
+    <string name="placeholder_screen">Pantalla «%1$s» — en construcción</string>
+</resources>
