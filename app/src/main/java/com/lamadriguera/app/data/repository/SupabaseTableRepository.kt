@@ -4,6 +4,9 @@ import com.lamadriguera.app.core.result.AppError
 import com.lamadriguera.app.core.result.Result
 import com.lamadriguera.app.data.remote.supabase.SupabaseJson
 import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.auth.exception.AuthErrorCode
+import io.github.jan.supabase.auth.exception.AuthRestException
+import io.github.jan.supabase.exceptions.RestException
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.exception.PostgrestRestException
 import io.github.jan.supabase.postgrest.query.Order
@@ -90,6 +93,40 @@ internal suspend fun <T> request(block: suspend () -> T): Result<T> = try {
             409 -> AppError.Conflict()
             else -> AppError.Server()
         }
+    }
+    Result.Error(mapped, code = error.statusCode)
+} catch (error: AuthRestException) {
+    val mapped = when (error.errorCode) {
+        AuthErrorCode.OtpExpired ->
+            AppError.Validation("El código ha expirado o no es válido. Solicita uno nuevo.")
+        AuthErrorCode.InvalidCredentials ->
+            AppError.Validation("El código no es correcto")
+        AuthErrorCode.OverSmsSendRateLimit, AuthErrorCode.OverRequestRateLimit ->
+            AppError.Validation("Demasiados intentos. Espera un momento e inténtalo de nuevo.")
+        AuthErrorCode.SmsSendFailed ->
+            AppError.Server("No se pudo enviar el SMS. Revisa el número e inténtalo de nuevo.")
+        AuthErrorCode.PhoneProviderDisabled, AuthErrorCode.SignupDisabled ->
+            AppError.Unauthorized("El acceso con teléfono no está disponible.")
+        AuthErrorCode.UserBanned ->
+            AppError.Unauthorized("Esta cuenta está suspendida.")
+        else -> when (error.statusCode) {
+            400 -> AppError.Validation("Datos no válidos")
+            401, 403 -> AppError.Unauthorized()
+            404 -> AppError.NotFound()
+            429 -> AppError.Validation("Demasiados intentos. Espera un momento e inténtalo de nuevo.")
+            else -> AppError.Server()
+        }
+    }
+    Result.Error(mapped, code = error.statusCode)
+} catch (error: RestException) {
+    val mapped = when (error.statusCode) {
+        400 -> AppError.Validation("Datos no válidos")
+        401, 403 -> AppError.Unauthorized()
+        404 -> AppError.NotFound()
+        409 -> AppError.Conflict()
+        413 -> AppError.Validation("El archivo es demasiado grande")
+        429 -> AppError.Validation("Demasiados intentos. Espera un momento e inténtalo de nuevo.")
+        else -> AppError.Server()
     }
     Result.Error(mapped, code = error.statusCode)
 } catch (error: AppError) {

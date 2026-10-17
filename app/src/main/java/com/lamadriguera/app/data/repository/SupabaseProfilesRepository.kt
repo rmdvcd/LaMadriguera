@@ -18,9 +18,10 @@ class SupabaseProfilesRepository @Inject constructor(client: SupabaseClient) :
         toRow = { it.toRow() },
         insertColumns = setOf(
             "user_id", "display_name", "alias", "avatar_url", "municipality_id", "privacy_level",
-            "bio"
+            "bio", "default_reveal_policy"
         ),
         updateColumns = setOf(
-            "display_name", "alias", "avatar_url", "municipality_id", "privacy_level", "bio"
+            "display_name", "alias", "avatar_url", "municipality_id", "privacy_level", "bio",
+            "default_reveal_policy"
         )
     ), ProfilesRepository

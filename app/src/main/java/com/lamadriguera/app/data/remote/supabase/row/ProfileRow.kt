@@ -25,5 +25,7 @@ data class ProfileRow(
     @Serializable(with = DecimalSerializer::class)
     val reputationAvg: BigDecimal = BigDecimal.ZERO,
     @SerialName("reviews_count")
-    val reviewsCount: Int = 0
+    val reviewsCount: Int = 0,
+    @SerialName("default_reveal_policy")
+    val defaultRevealPolicy: RevealPolicy = RevealPolicy.NEVER
 )

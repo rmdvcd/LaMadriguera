@@ -9,15 +9,13 @@ import kotlinx.serialization.Serializable
  * Toda navegación debe usar estos destinos, nunca strings sueltos.
  *
  * Flujo:
- *  Splash -> (sesión válida?) -> Home/Listings  |  Login
+ *  Splash -> (sesión válida?) -> Listings  |  PhoneLogin (teléfono + OTP)
  */
 sealed interface Destinations {
 
     // --- Arranque y autenticación ---
     @Serializable data object Splash : Destinations
-    @Serializable data object Login : Destinations
-    @Serializable data object Register : Destinations
-    @Serializable data object ForgotPassword : Destinations
+    @Serializable data object PhoneLogin : Destinations
 
     // --- Raíz autenticada ---
     @Serializable data object Home : Destinations
@@ -47,6 +45,8 @@ sealed interface Destinations {
     @Serializable data object Profile : Destinations
     @Serializable data object EditProfile : Destinations
     @Serializable data object Settings : Destinations
+    @Serializable data object IdentityVerification : Destinations
+    @Serializable data object PrivacySettings : Destinations
 
     // --- Pagos ---
     @Serializable data object Payments : Destinations

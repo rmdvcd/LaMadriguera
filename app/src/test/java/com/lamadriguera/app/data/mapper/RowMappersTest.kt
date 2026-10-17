@@ -33,7 +33,7 @@ class RowMappersTest {
             docRef = "\\x0080ff",
             fullName = "fullName-value",
             birthdate = "1990-03-14",
-            status = "status-value",
+            status = IdentityVerificationStatus.APPROVED,
             verifiedBy = "verifiedBy-value",
             verifiedAt = "2026-10-17T12:30:00Z",
             retentionUntil = "2026-10-17T12:30:00Z"
@@ -54,7 +54,8 @@ class RowMappersTest {
             privacyLevel = PrivacyLevel.PUBLIC,
             bio = "bio-value",
             reputationAvg = BigDecimal("4.25"),
-            reviewsCount = 25
+            reviewsCount = 25,
+            defaultRevealPolicy = RevealPolicy.ON_DEAL
         )
         val domain = row.toDomain()
         assertEquals(row, domain.toRow())

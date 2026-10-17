@@ -24,6 +24,28 @@ enum class PrivacyLevel {
     @SerialName("anon") ANON
 }
 
+/**
+ * Estado de la solicitud de verificación de identidad.
+ * El cliente solo crea solicitudes [PENDING]; un administrador pasa a [APPROVED]
+ * o [REJECTED]. El wire coincide con el CHECK de identity_verifications.
+ */
+@Serializable
+enum class IdentityVerificationStatus {
+    @SerialName("pending") PENDING,
+    @SerialName("approved") APPROVED,
+    @SerialName("rejected") REJECTED
+}
+
+/**
+ * Clase de cuenta en el dispositivo: 1 teléfono (dispositivo) = 1 cuenta
+ * principal. Las cuentas adicionales requieren verificación de identidad para
+ * subastas y apuestas (ver [UserCapabilities]).
+ */
+enum class AccountKind {
+    PRIMARY,
+    SECONDARY
+}
+
 @Serializable
 enum class ListingKind {
     @SerialName("offer") OFFER,

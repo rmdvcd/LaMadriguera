@@ -23,6 +23,40 @@
     <string name="auth_no_account">¿No tienes cuenta?</string>
     <string name="auth_has_account">¿Ya tienes cuenta?</string>
 
+    <!-- Acceso con teléfono + OTP -->
+    <string name="auth_phone_title">Entra con tu teléfono</string>
+    <string name="auth_phone_subtitle">Te enviaremos un código por SMS para crear tu cuenta o iniciar sesión.</string>
+    <string name="auth_phone_label">Teléfono</string>
+    <string name="auth_phone_hint">+53 5xxxxxxx</string>
+    <string name="auth_phone_rule">1 teléfono = 1 cuenta principal. Las cuentas adicionales requieren verificación de identidad para subastas y apuestas.</string>
+    <string name="auth_send_code">Enviar código</string>
+    <string name="auth_otp_label">Código SMS</string>
+    <string name="auth_otp_hint">6 dígitos</string>
+    <string name="auth_code_sent">Código enviado a %1$s</string>
+    <string name="auth_verify_code">Verificar código</string>
+    <string name="auth_resend_code">Reenviar código</string>
+
+    <!-- Verificación de identidad -->
+    <string name="identity_title">Verificación de identidad</string>
+    <string name="identity_subtitle">Sube las fotos de tu carnet de identidad. Un administrador revisará tus datos.</string>
+    <string name="identity_front">Frente del carnet</string>
+    <string name="identity_back">Reverso del carnet</string>
+    <string name="identity_select_image">Seleccionar imagen</string>
+    <string name="identity_image_selected">Imagen seleccionada</string>
+    <string name="identity_full_name">Nombre completo</string>
+    <string name="identity_birthdate">Fecha de nacimiento</string>
+    <string name="identity_birthdate_select">Elegir fecha</string>
+    <string name="identity_terms">Acepto el tratamiento de mis datos para verificar mi identidad</string>
+    <string name="identity_submit">Enviar verificación</string>
+    <string name="identity_retention_note">Conservaremos tus documentos solo durante el tiempo necesario para la verificación y la prevención de fraude.</string>
+    <string name="identity_status_pending">Solicitud en revisión</string>
+    <string name="identity_status_pending_desc">Tu identidad está siendo revisada. Te avisaremos cuando sea aprobada. Hasta entonces, tu cuenta es temporal.</string>
+    <string name="identity_status_approved">Identidad aprobada</string>
+    <string name="identity_status_approved_desc">Tu cuenta está verificada. Ya puedes crear grupos, apostar y participar en subastas.</string>
+    <string name="identity_status_rejected">Solicitud rechazada</string>
+    <string name="identity_status_rejected_desc">Revisa tus datos y vuelve a enviar la solicitud.</string>
+    <string name="identity_resubmit">Volver a enviar</string>
+
     <!-- Pantallas (títulos usados por placeholders y futuras pantallas) -->
     <string name="screen_splash">Verificando sesión</string>
     <string name="screen_listing_detail">Detalle de publicación</string>
@@ -69,6 +103,43 @@
     <string name="profile_title">Mi perfil</string>
     <string name="profile_edit">Editar perfil</string>
     <string name="profile_settings">Configuración</string>
+    <string name="profile_alias_label">Alias</string>
+    <string name="profile_alias_none">Sin alias</string>
+    <string name="profile_municipio">Municipio</string>
+    <string name="profile_municipio_value">Municipio %1$d</string>
+    <string name="profile_municipio_none">Sin municipio</string>
+    <string name="profile_bio">Biografía</string>
+    <string name="profile_bio_none">Sin biografía</string>
+    <string name="profile_reputation">Reputación</string>
+    <string name="profile_reviews_count">%1$d reseñas</string>
+    <string name="profile_account_status">Estado de la cuenta</string>
+    <string name="profile_status_temp">Cuenta temporal: verifica tu identidad para crear grupos y apostar.</string>
+    <string name="profile_status_phone">Teléfono verificado</string>
+    <string name="profile_status_identity">Identidad verificada</string>
+    <string name="profile_verify_identity">Verificar identidad</string>
+    <string name="profile_privacy_settings">Configuración de privacidad</string>
+    <string name="profile_account_kind_primary">Cuenta principal</string>
+    <string name="profile_account_kind_secondary">Cuenta adicional: requiere identidad verificada para subastas y apuestas</string>
+
+    <!-- Privacidad -->
+    <string name="privacy_title">Configuración de privacidad</string>
+    <string name="privacy_level_title">Nivel de privacidad por defecto</string>
+    <string name="privacy_level_public">Público</string>
+    <string name="privacy_level_public_desc">Tu nombre y perfil son visibles para todos.</string>
+    <string name="privacy_level_anon">Anónimo</string>
+    <string name="privacy_level_anon_desc">Te mostrarás con un alias. Generaremos uno si no defines el tuyo.</string>
+    <string name="privacy_alias_hint">Alias (opcional si eliges anónimo)</string>
+    <string name="privacy_reveal_title">Política de revelación en el chat</string>
+    <string name="privacy_reveal_never">Nunca</string>
+    <string name="privacy_reveal_never_desc">Tu identidad nunca se revela en el chat.</string>
+    <string name="privacy_reveal_on_deal">Al concretar el trato</string>
+    <string name="privacy_reveal_on_deal_desc">Se revela cuando ambas partes acuerdan un trato.</string>
+    <string name="privacy_reveal_on_dispute">En caso de disputa</string>
+    <string name="privacy_reveal_on_dispute_desc">Solo se revela si se abre una disputa.</string>
+    <string name="privacy_reveal_configurable">Configurable por conversación</string>
+    <string name="privacy_reveal_configurable_desc">Tú eliges en cada conversación.</string>
+    <string name="privacy_notice">Solo puedes cambiar el nivel antes de publicar</string>
+    <string name="privacy_saved">Configuración guardada</string>
 
     <!-- Moderación -->
     <string name="moderation_title">Centro de moderación</string>
