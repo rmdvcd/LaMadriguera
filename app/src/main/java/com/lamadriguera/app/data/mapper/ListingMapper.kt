@@ -21,7 +21,9 @@ fun ListingRow.toDomain(): Listing = Listing(
     auctionConfig = auctionConfig,
     status = status,
     boostedUntil = boostedUntil?.let(Instant::parse),
-    createdAt = Instant.parse(createdAt)
+    createdAt = Instant.parse(createdAt),
+    photoUrl = photoUrl,
+    visibility = visibility
 )
 
 fun Listing.toRow(): ListingRow = ListingRow(
@@ -41,5 +43,7 @@ fun Listing.toRow(): ListingRow = ListingRow(
     auctionConfig = auctionConfig,
     status = status,
     boostedUntil = boostedUntil?.toString(),
-    createdAt = createdAt.toString()
+    createdAt = createdAt.toString(),
+    photoUrl = photoUrl,
+    visibility = visibility
 )

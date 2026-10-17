@@ -37,5 +37,8 @@ data class ListingRow(
     @SerialName("boosted_until")
     val boostedUntil: String? = null,
     @SerialName("created_at")
-    val createdAt: String
+    val createdAt: String,
+    @SerialName("photo_url")
+    val photoUrl: String? = null,
+    val visibility: ListingVisibility = ListingVisibility.PUBLIC
 )

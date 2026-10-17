@@ -12,6 +12,7 @@ const listing = '10000000-0000-0000-0000-000000000001';
 const paused = '10000000-0000-0000-0000-000000000002';
 const conversation = '20000000-0000-0000-0000-000000000001';
 const group = '30000000-0000-0000-0000-000000000001';
+const category = '40000000-0000-0000-0000-000000000001';
 
 const db = new PGlite();
 async function as(id, sql, role = 'authenticated', appRole = 'user', userMetadata = {}) {
@@ -57,12 +58,13 @@ await db.exec(`
 `);
 await db.exec(await readFile(new URL('../migrations/001_initial_schema.sql', import.meta.url), 'utf8'));
 await db.exec(await readFile(new URL('../migrations/002_auth_identity_privacy.sql', import.meta.url), 'utf8'));
+await db.exec(await readFile(new URL('../migrations/003_listings_auctions.sql', import.meta.url), 'utf8'));
 await db.exec(`
   INSERT INTO auth.users(id) VALUES ('${user}'), ('${peer}'), ('${outsider}'), ('${admin}');
-  INSERT INTO public.categories(id, name) VALUES ('40000000-0000-0000-0000-000000000001', 'General');
+  INSERT INTO public.categories(id, name) VALUES ('${category}', 'General');
   INSERT INTO public.listings(id, owner_id, title, description, category_id, price, status) VALUES
-    ('${listing}', '${user}', 'Oferta', 'Descripción', '40000000-0000-0000-0000-000000000001', 10, 'active'),
-    ('${paused}', '${user}', 'Privada', 'Descripción', '40000000-0000-0000-0000-000000000001', 10, 'closed');
+    ('${listing}', '${user}', 'Oferta', 'Descripción', '${category}', 10, 'active'),
+    ('${paused}', '${user}', 'Privada', 'Descripción', '${category}', 10, 'closed');
   INSERT INTO public.conversations(id, listing_id, participant_a, participant_b)
     VALUES ('${conversation}', '${listing}', '${user}', '${peer}');
   INSERT INTO public.messages(conversation_id, sender_id, content_ref)
@@ -106,10 +108,10 @@ test('Kotlin row wire names match every SQL column', async () => {
 test('Kotlin enum wire values match SQL enums', async () => {
   const mappings = {
     VerificationLevel: 'verification_level', UserStatus: 'user_status', PrivacyLevel: 'privacy_level',
-    ListingKind: 'listing_kind', SaleMode: 'sale_mode', ListingStatus: 'listing_status',
-    BidStatus: 'bid_status', RevealPolicy: 'reveal_policy', MessageType: 'message_type',
-    ProductType: 'product_type', PaymentStatus: 'payment_status', BetStatus: 'bet_status',
-    ModerationSource: 'moderation_source'
+    ListingKind: 'listing_kind', ListingVisibility: 'listing_visibility', SaleMode: 'sale_mode',
+    ListingStatus: 'listing_status', BidStatus: 'bid_status', RevealPolicy: 'reveal_policy',
+    MessageType: 'message_type', ProductType: 'product_type', PaymentStatus: 'payment_status',
+    BetStatus: 'bet_status', ModerationSource: 'moderation_source'
   };
   const source = await readFile(new URL('../../app/src/main/java/com/lamadriguera/app/domain/model/Enums.kt', import.meta.url), 'utf8');
   for (const [model, sqlType] of Object.entries(mappings)) {
@@ -223,8 +225,8 @@ test('identity documents bucket is private and folder-scoped per user', async ()
     as(user, `INSERT INTO storage.objects(bucket_id, name) VALUES ('identity-docs', '${peer}/front.jpg')`),
     /row-level security/);
   assert.equal(count(await as(user, `SELECT count(*) FROM storage.objects WHERE name LIKE '${user}/%'`)), 1);
-  assert.equal(count(await as(peer, 'SELECT count(*) FROM storage.objects')), 0);
-  assert.equal(count(await as(admin, 'SELECT count(*) FROM storage.objects', 'authenticated', 'admin')), 1);
+  assert.equal(count(await as(peer, 'SELECT count(*) FROM storage.objects WHERE bucket_id = \'identity-docs\'')), 0);
+  assert.equal(count(await as(admin, 'SELECT count(*) FROM storage.objects WHERE bucket_id = \'identity-docs\'', 'authenticated', 'admin')), 1);
   // DELETE on invisible rows removes nothing instead of erroring.
   const removed = await as(user, `DELETE FROM storage.objects WHERE name = '${user}/front.jpg' RETURNING id`);
   assert.equal(removed.rows.length, 1);
@@ -239,6 +241,187 @@ test('listings: public active feed; only owner writes; boost cannot be forged', 
   assert.equal((await as(user, `UPDATE public.listings SET title = 'Nuevo' WHERE id = '${listing}' RETURNING id`)).rows.length, 1);
   await assert.rejects(as(user, "UPDATE public.listings SET boosted_until = now() + interval '1 year'"), /permission denied/);
   await assert.rejects(as(user, `UPDATE public.listings SET owner_id = '${peer}'`), /permission denied/);
+});
+
+test('listings: request visibility providers_only hides demand from non-providers', async () => {
+  const reqId = '10000000-0000-0000-0000-000000000010';
+  await as(peer, `INSERT INTO public.listings(id, owner_id, kind, title, description, category_id, price, visibility)
+    VALUES ('${reqId}', '${peer}', 'request', 'Busco cemento', 'En La Habana', '${category}', 0, 'providers_only')`);
+  // Offer cannot have providers_only visibility
+  await assert.rejects(as(peer, `INSERT INTO public.listings(owner_id, kind, title, description, category_id, price, visibility)
+    VALUES ('${peer}', 'offer', 'Oferta inválida', 'Detalle', '${category}', 10, 'providers_only')`), /check constraint/);
+  // Outsider (not a provider, not verified) cannot see providers_only request
+  assert.equal(count(await as(outsider, `SELECT count(*) FROM public.listings WHERE id = '${reqId}'`)), 0);
+  // User (has active offer and identity verification) is a provider and can see it
+  assert.equal(count(await as(user, `SELECT count(*) FROM public.listings WHERE id = '${reqId}'`)), 1);
+  // Owner (peer) can see their own request
+  assert.equal(count(await as(peer, `SELECT count(*) FROM public.listings WHERE id = '${reqId}'`)), 1);
+  await as(peer, `DELETE FROM public.listings WHERE id = '${reqId}'`);
+});
+
+test('auctions: config validation, edit lock after bids, security rules, auto-extend and closing states', async () => {
+  const auctionId = '10000000-0000-0000-0000-000000000020';
+  const noReserveMetId = '10000000-0000-0000-0000-000000000021';
+  const expiredId = '10000000-0000-0000-0000-000000000022';
+
+  // Invalid config: ends_at <= starts_at or starting_price <= 0 must fail
+  await assert.rejects(as(user, `INSERT INTO public.listings(owner_id, title, description, category_id, price, sale_mode, auction_config)
+    VALUES ('${user}', 'Subasta inválida', 'Desc', '${category}', 100, 'auction',
+    jsonb_build_object('starting_price', 0, 'min_increment', 10, 'starts_at', now(), 'ends_at', now() + interval '1 hour'))`), /starting_price/);
+
+  await assert.rejects(as(user, `INSERT INTO public.listings(owner_id, title, description, category_id, price, sale_mode, auction_config)
+    VALUES ('${user}', 'Subasta inválida 2', 'Desc', '${category}', 100, 'auction',
+    jsonb_build_object('starting_price', 100, 'min_increment', 10, 'starts_at', now() + interval '2 hours', 'ends_at', now() + interval '1 hour'))`), /ends_at/);
+
+  // Create a scheduled auction first, then owner edits it before any bids
+  await as(user, `INSERT INTO public.listings(id, owner_id, title, description, category_id, price, sale_mode, auction_config)
+    VALUES ('${auctionId}', '${user}', 'Laptop en subasta', 'Core i7', '${category}', 100, 'auction',
+    jsonb_build_object(
+      'starting_price', 100,
+      'min_increment', 10,
+      'reserve_price', 120,
+      'starts_at', (now() + interval '10 minutes')::text,
+      'ends_at', (now() + interval '1 hour')::text,
+      'auto_extend_minutes', 2,
+      'requires_identity', true,
+      'visible_bids', 'all'
+    ))`);
+
+  let stateRow = await db.query(`SELECT status FROM public.listings WHERE id = '${auctionId}'`);
+  assert.equal(stateRow.rows[0].status, 'auction_scheduled');
+
+  // Owner can edit config while there are no bids (make it live now, ending in 1 minute to test auto-extend)
+  await as(user, `UPDATE public.listings SET auction_config = jsonb_build_object(
+      'starting_price', 100,
+      'min_increment', 10,
+      'reserve_price', 120,
+      'starts_at', (now() - interval '5 minutes')::text,
+      'ends_at', (now() + interval '1 minute')::text,
+      'auto_extend_minutes', 2,
+      'requires_identity', true,
+      'visible_bids', 'all'
+    ) WHERE id = '${auctionId}'`);
+
+  stateRow = await db.query(`SELECT status, auction_config->>'ends_at' AS ends_at FROM public.listings WHERE id = '${auctionId}'`);
+  assert.equal(stateRow.rows[0].status, 'auction_live');
+  const initialEndsAt = new Date(stateRow.rows[0].ends_at).getTime();
+
+  // Security 1: outsider only has verification_level = 'phone', cannot bid when requires_identity = true
+  await assert.rejects(
+    as(outsider, `SELECT * FROM public.place_auction_bid('${auctionId}', 100)`),
+    /identidad/
+  );
+
+  // Approve peer's identity so peer has verification_level = 'identity'
+  await as(admin, `UPDATE public.identity_verifications SET status = 'approved', verified_by = '${admin}', verified_at = now()
+    WHERE user_id = '${peer}' AND status = 'pending'`, 'authenticated', 'admin');
+
+  // Security 2: user with open dispute cannot bid
+  await db.exec(`UPDATE public.conversations SET status = 'disputed' WHERE id = '${conversation}'`);
+  await assert.rejects(
+    as(peer, `SELECT * FROM public.place_auction_bid('${auctionId}', 100)`),
+    /disputa abierta/
+  );
+  await db.exec(`UPDATE public.conversations SET status = 'active' WHERE id = '${conversation}'`);
+
+  // Bid 1 by peer (valid, >= starting_price 100)
+  await as(peer, `SELECT * FROM public.place_auction_bid('${auctionId}', 100)`);
+
+  // Auto-extend check: since ends_at was 1 minute away (<= 2 min), ends_at must have extended!
+  const afterBidRow = await db.query(`SELECT auction_config->>'ends_at' AS ends_at FROM public.listings WHERE id = '${auctionId}'`);
+  const extendedEndsAt = new Date(afterBidRow.rows[0].ends_at).getTime();
+  assert.ok(extendedEndsAt > initialEndsAt, 'ends_at should auto-extend when bid arrives near closing');
+
+  // Owner CANNOT edit auction_config once a bid exists
+  await assert.rejects(
+    as(user, `UPDATE public.listings SET auction_config = jsonb_set(auction_config, '{min_increment}', '50') WHERE id = '${auctionId}'`),
+    /no haya pujas/
+  );
+
+  // Bid below min_increment (current 100 + 10 = 110) fails
+  await assert.rejects(
+    as(peer, `SELECT * FROM public.place_auction_bid('${auctionId}', 105)`),
+    /mínimo requerido/
+  );
+
+  // Bid 2 and Bid 3 by peer
+  await as(peer, `SELECT * FROM public.place_auction_bid('${auctionId}', 115)`);
+  await as(peer, `SELECT * FROM public.place_auction_bid('${auctionId}', 130)`);
+
+  // Security 3: Maximum 3 bids per user per auction
+  await assert.rejects(
+    as(peer, `SELECT * FROM public.place_auction_bid('${auctionId}', 150)`),
+    /Máximo 3 pujas/
+  );
+
+  // Move ends_at to the past to close the auction (reserve 120 was met by 130)
+  await db.exec(`
+    ALTER TABLE public.listings DISABLE TRIGGER listings_auction_guard;
+    UPDATE public.listings
+    SET auction_config = jsonb_set(auction_config, '{ends_at}', to_jsonb((now() - interval '1 minute')::text))
+    WHERE id = '${auctionId}';
+    ALTER TABLE public.listings ENABLE TRIGGER listings_auction_guard;
+  `);
+
+  const closedAwarded = await as(user, `SELECT status, price::text FROM public.close_auction('${auctionId}')`);
+  assert.equal(closedAwarded.rows[0].status, 'awarded');
+  assert.equal(closedAwarded.rows[0].price, '130');
+
+  const winningBids = await db.query(`SELECT amount::text, status FROM public.bids WHERE listing_id = '${auctionId}' ORDER BY amount DESC`);
+  assert.equal(winningBids.rows[0].status, 'winning');
+  assert.equal(winningBids.rows[0].amount, '130');
+  assert.equal(winningBids.rows[1].status, 'losing');
+
+  // Case 2: reserve not met -> no_reserve_met
+  await as(user, `INSERT INTO public.listings(id, owner_id, title, description, category_id, price, sale_mode, auction_config)
+    VALUES ('${noReserveMetId}', '${user}', 'Subasta con reserva alta', 'Desc', '${category}', 100, 'auction',
+    jsonb_build_object(
+      'starting_price', 100,
+      'min_increment', 10,
+      'reserve_price', 500,
+      'starts_at', (now() - interval '10 minutes')::text,
+      'ends_at', (now() + interval '10 minutes')::text,
+      'auto_extend_minutes', 2,
+      'requires_identity', false,
+      'visible_bids', 'owner'
+    ))`);
+  await as(outsider, `SELECT * FROM public.place_auction_bid('${noReserveMetId}', 120)`);
+  // With visible_bids = 'owner', peer (neither bidder nor owner) cannot read bids of noReserveMetId
+  assert.equal(count(await as(peer, `SELECT count(*) FROM public.bids WHERE listing_id = '${noReserveMetId}'`)), 0);
+  // Owner can read them
+  assert.equal(count(await as(user, `SELECT count(*) FROM public.bids WHERE listing_id = '${noReserveMetId}'`)), 1);
+
+  await db.exec(`
+    ALTER TABLE public.listings DISABLE TRIGGER listings_auction_guard;
+    UPDATE public.listings
+    SET auction_config = jsonb_set(auction_config, '{ends_at}', to_jsonb((now() - interval '1 minute')::text))
+    WHERE id = '${noReserveMetId}';
+    ALTER TABLE public.listings ENABLE TRIGGER listings_auction_guard;
+  `);
+  const closedNoReserve = await as(user, `SELECT status FROM public.close_auction('${noReserveMetId}')`);
+  assert.equal(closedNoReserve.rows[0].status, 'no_reserve_met');
+
+  // Case 3: no bids -> expired (via close_due_auctions job)
+  await as(user, `INSERT INTO public.listings(id, owner_id, title, description, category_id, price, sale_mode, auction_config)
+    VALUES ('${expiredId}', '${user}', 'Subasta desierta', 'Desc', '${category}', 100, 'auction',
+    jsonb_build_object(
+      'starting_price', 100,
+      'min_increment', 10,
+      'starts_at', (now() - interval '20 minutes')::text,
+      'ends_at', (now() - interval '1 minute')::text,
+      'auto_extend_minutes', 2,
+      'requires_identity', true,
+      'visible_bids', 'all'
+    ))`);
+  await as(user, 'SELECT * FROM public.close_due_auctions()');
+  const expiredState = await db.query(`SELECT status FROM public.listings WHERE id = '${expiredId}'`);
+  assert.equal(expiredState.rows[0].status, 'expired');
+
+  // Clean up test auctions so subsequent tests see the base state
+  await db.exec(`
+    DELETE FROM public.bids WHERE listing_id IN ('${auctionId}', '${noReserveMetId}', '${expiredId}');
+    DELETE FROM public.listings WHERE id IN ('${auctionId}', '${noReserveMetId}', '${expiredId}');
+  `);
 });
 
 test('chat: participants only, moderators need an open dispute; no participant hijacking', async () => {

@@ -246,9 +246,15 @@ Tipografía del sistema para mantener el APK ligero (redes móviles limitadas).
       persistente, Splash → PhoneLogin/Publicaciones, verificación de identidad con
       carnet (Storage privado + revisión admin), perfil con reputación y privacidad
       (alias automático, revelación en chat).
-- [ ] **Fase 2 — Marketplace:** listado y detalle con Postgrest + Storage/Coil.
+- [x] **Fase 2 — Marketplace y Subastas:** creación de ofertas y demandas (visibilidad
+      pública o solo proveedores), compresión de foto en cliente (`<= 1 MB`), listado con
+      búsqueda por municipio + categoría + filtro offer/request, ranking ponderado
+      (relevancia 45%, proximidad 25%, reputación 15%, frescura 10%, respuesta 5%; boost
+      ×1.3 sin saltar reputación < 3), modo subasta configurable (`AuctionConfigScreen`,
+      `ListingDetailScreen`, `BidHistoryScreen`), seguridad de pujas y cierre de subastas
+      (RPC `close_auction` / `close_due_auctions` + `AuctionClosureWorker`).
 - [ ] **Fase 3 — Chat:** Realtime, conversaciones y mensajes.
-- [ ] **Fase 4 — Subastas y apuestas:** pujas, validación de saldo y reglas peer-to-peer.
+- [ ] **Fase 4 — Apuestas:** validación de saldo y reglas peer-to-peer.
 - [ ] **Fase 5 — Pagos y moderación.**
 - [ ] **Fase 6 — Offline-first:** Room + WorkManager para sincronización con redes inestables.
 

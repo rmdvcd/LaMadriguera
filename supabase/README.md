@@ -14,11 +14,21 @@ reputación sobre `reviews`, promoción de cuenta al confirmar teléfono/aprobar
 el bucket privado `identity-docs` con políticas por carpeta `<auth.uid()>/`. Se ejecuta una
 vez, después de la 001.
 
+`migrations/003_listings_auctions.sql` añade el módulo de listings y subastas (Fase 2):
+foto opcional (`photo_url`), visibilidad de demandas (`public` / `providers_only`),
+estados de subasta (`fixed`, `auction_scheduled`, `auction_live`, `auction_ended`,
+`awarded`, `no_reserve_met`, `expired`), validación y bloqueo de `auction_config` tras la
+primera puja, reglas de seguridad en pujas (`verification_level='identity'` cuando
+`requires_identity=true`, máx. 3 pujas por usuario por subasta, bloqueo por disputa
+abierta, auto-extensión), las funciones RPC `place_auction_bid`, `close_auction` y
+`close_due_auctions` y el bucket `listing-photos`.
+
 Ejecutar desde el SQL Editor de Supabase como `postgres`, o con conexión administrativa:
 
 ```sh
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/001_initial_schema.sql
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/002_auth_identity_privacy.sql
+psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/003_listings_auctions.sql
 ```
 
 No poner la contraseña de PostgreSQL ni la service-role key en Android/local.properties.
