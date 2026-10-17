@@ -1,18 +1,26 @@
 package com.lamadriguera.app.domain.model
 
-import kotlinx.serialization.Serializable
+import java.time.Instant
+import java.math.BigDecimal
+import kotlinx.serialization.json.JsonObject
 
-@Serializable
+/** Domain model; money uses exact decimal arithmetic, dates use java.time. */
 data class Listing(
     val id: String,
     val ownerId: String,
+    val kind: ListingKind = ListingKind.OFFER,
     val title: String,
     val description: String,
-    val price: Double,
+    val categoryId: String,
+    val price: BigDecimal,
     val currency: String = "CUP",
-    val images: List<String> = emptyList(),
+    val priceNegotiable: Boolean = false,
+    val municipalityId: Int? = null,
+    val radiusKm: Int = 10,
+    val privacyLevel: PrivacyLevel = PrivacyLevel.PUBLIC,
+    val saleMode: SaleMode = SaleMode.FIXED,
+    val auctionConfig: JsonObject? = null,
     val status: ListingStatus = ListingStatus.ACTIVE,
-    val createdAt: String? = null
+    val boostedUntil: Instant? = null,
+    val createdAt: Instant
 )
-
-enum class ListingStatus { ACTIVE, SOLD, PAUSED, DELETED }

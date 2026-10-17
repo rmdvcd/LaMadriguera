@@ -36,3 +36,6 @@ secrets.properties
 
 # Logs
 *.log
+
+# Node tooling (SQL regression tests)
+node_modules/

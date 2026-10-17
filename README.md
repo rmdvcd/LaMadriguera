@@ -2,9 +2,13 @@
 
 Aplicación Android de **marketplace y apuestas peer-to-peer para Cuba**.
 
-Este repositorio contiene el **esqueleto compilable** del proyecto: arquitectura, navegación,
-tema Material 3, inyección de dependencias y contratos de dominio. **Todavía no hay pantallas
+Este repositorio contiene el esqueleto Android (arquitectura, navegación, tema e inyección)
+y la **capa de persistencia Supabase/Kotlin**: migración SQL con RLS, DTOs serializables,
+modelos, mappers y repositorios base inyectados por Hilt. **Todavía no hay pantallas
 implementadas**; cada ruta del grafo muestra un placeholder.
+
+La configuración del esquema, permisos y pruebas de la capa de datos se documenta en
+[`supabase/README.md`](supabase/README.md).
 
 ---
 
@@ -118,8 +122,9 @@ com.lamadriguera.app
 │
 ├── data/
 │   ├── local/                 DataStore y base de datos local (fase 2)
-│   ├── remote/supabase/       Clientes y DTOs de Supabase (fase 2)
-│   └── repository/            Implementaciones de los repositorios (fase 2)
+│   ├── remote/supabase/       Provider, JSON y 16 DTOs de tabla (@Serializable)
+│   ├── mapper/                Row ↔ dominio, bytea, fechas y decimales exactos
+│   └── repository/            Repositorios PostgREST por tabla
 │
 ├── domain/
 │   ├── model/                 User, Listing, Auction, Bet, Conversation, Message
