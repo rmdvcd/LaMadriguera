@@ -39,6 +39,8 @@ import com.lamadriguera.app.domain.model.ListingStatus
 import com.lamadriguera.app.domain.model.ListingVisibility
 import com.lamadriguera.app.domain.model.PrivacyLevel
 import com.lamadriguera.app.domain.model.SaleMode
+import com.lamadriguera.app.feature.moderation.ReportButton
+import com.lamadriguera.app.domain.model.ModerationTargetType
 import com.lamadriguera.app.ui.components.ErrorState
 import com.lamadriguera.app.ui.components.LoadingState
 import com.lamadriguera.app.ui.components.ReputationStars
@@ -130,11 +132,21 @@ fun ListingDetailScreen(
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = listing.title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = listing.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    ReportButton(
+                        targetType = ModerationTargetType.LISTING,
+                        targetId = listing.id
+                    )
+                }
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Precio fijo vs Panel de Subasta

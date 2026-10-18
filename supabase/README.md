@@ -57,6 +57,25 @@ coincidir en monto, últimos cuatro dígitos y fecha/hora (tolerancia de 15 minu
 comprobante, hora de Cuba). El barrido `pg_cron` cancela pendientes vencidos; la app también
 caduca las órdenes propias al abrir pagos o intentar crear otra.
 
+`migrations/008_moderation.sql` implementa la moderación de contenidos:
+`moderation_reviews` (cola humana: solo lo dudoso que la IA marca o lo que reportan los
+usuarios; severidad 0–5, estados `pending/in_review/resolved/dismissed`),
+`group_messages` (mensajes de los muros de grupos con `hidden_at/by/reason`), columnas de
+contenido oculto en `listings`/`bets`, `users.suspended_until`, `reports` con categoría y
+severidad y `moderation_actions` ampliado con `evidence` (la evidencia completa del
+contenido). Las acciones son exactamente `warn`, `hide`, `suspend` (30 días exactos),
+`ban` (más `block` para intentos bloqueados antes de publicar y `decrypt_conversation` del
+flujo de disputas). **Nunca se borra el contenido original**: `hide` marca el registro y
+guarda su snapshot en `evidence`; las tablas de contenido quedan sin `DELETE` para clientes
+y `moderation_actions` sigue siendo append-only. RPCs: `post_group_message`,
+`set_betting_group_rules` (solo owner), `flag_moderation_review` (solo el autor del
+contenido, idempotente), `record_ai_moderation_action` (bloqueos de IA), 
+`apply_moderation_action` (moderadores, o dueños de grupo limitados a `warn`/`hide` en SU
+grupo), `dismiss_moderation_review`, `group_moderation_queue` (solo owner) y
+`expire_user_suspensions`. **La plataforma no modera el contenido privado de los grupos**:
+el muro y los mensajes de grupo solo se sancionan desde el admin del grupo o con reporte de
+usuario; el chat privado es exclusivo del flujo de disputas.
+
 El rol confiable `app_metadata.role = "cashier"` (cobrador), al igual que `"admin"`, puede
 conciliar y configurar cuenta/tarifas; `user_metadata` nunca concede estos permisos. La cola
 admin muestra la evidencia mediante una URL firmada de cinco minutos; el bucket permanece
@@ -84,9 +103,15 @@ psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/004_chat_encry
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/005_peer_betting.sql
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/006_monetization_schema.sql
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/007_monetization_workflow.sql
+psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/008_moderation.sql
 ```
 
-Desplegar la función Edge después de aplicar las migraciones: `supabase functions deploy submit-payment-proof`.
+Desplegar las funciones Edge después de aplicar las migraciones:
+
+```sh
+supabase functions deploy submit-payment-proof
+supabase functions deploy moderate-text
+```
 
 No poner la contraseña de PostgreSQL ni la service-role key en Android/local.properties.
 Las tablas de la aplicación tienen RLS activada, índices, claves foráneas y restricciones.
@@ -272,6 +297,12 @@ atómico, evidencia, transición a disputa, decisión del owner, autoexclusión 
 Storage privado e historial append-only. La monetización verifica catálogo desactivado hasta
 configurar tarifas, bloqueo sin cuenta destino, permisos de cobrador, hash/lista negra,
 conciliación con monto/horario, restauración de publicaciones, reintentos y notificaciones.
+La moderación verifica que solo los miembros publican en el muro, que `hide` conserva el
+contenido con evidencia, que los reportes entran solos a la cola humana, que los
+bloqueos de IA se registran append-only, las sanciones `warn`/`hide`/`suspend` (30
+días)/`ban`, el alcance de los admins de grupo (solo su grupo, sin `suspend`/`ban`), que
+la plataforma no modera el chat privado y la expiración de suspensiones. También se
+prueban los mapeos de categorías de OpenAI/Llama Guard (`tests/moderation-mapping.test.mjs`).
 Esto no sustituye una prueba de integración en un proyecto Supabase antes de desplegar.
 
 ### JVM (requiere JDK 17, Android SDK 35 y dependencias Gradle)

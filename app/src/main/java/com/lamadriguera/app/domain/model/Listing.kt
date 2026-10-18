@@ -24,8 +24,14 @@ data class Listing(
     val boostedUntil: Instant? = null,
     val createdAt: Instant,
     val photoUrl: String? = null,
-    val visibility: ListingVisibility = ListingVisibility.PUBLIC
+    val visibility: ListingVisibility = ListingVisibility.PUBLIC,
+    /** Ocultación por moderación: la fila permanece (nunca se borra) con evidencia. */
+    val hiddenAt: Instant? = null,
+    val hiddenBy: String? = null,
+    val hiddenReason: String? = null
 ) {
+    val isHidden: Boolean get() = hiddenAt != null
+
     /** Configuración tipada de subasta decodificada desde [auctionConfig]. */
     val parsedAuctionConfig: AuctionConfig?
         get() = AuctionConfigCodec.decodeOrNull(auctionConfig)

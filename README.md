@@ -124,13 +124,15 @@ com.lamadriguera.app
 ├── data/
 │   ├── local/                 DataStore y base de datos local (fase 2)
 │   ├── remote/supabase/       Provider, JSON y 25 DTOs de tabla/RPC (@Serializable)
+│   ├── remote/moderation/     RemoteModerationApi: Edge Function moderate-text (Ktor)
+│   ├── moderation/            NsfwJsImageScanner (NSFW JS en WebView)
 │   ├── mapper/                Row ↔ dominio, bytea, fechas y decimales exactos
 │   └── repository/            Repositorios PostgREST por tabla
 │
 ├── domain/
-│   ├── model/                 User, Listing, Auction, Bet, Conversation, Message
-│   ├── repository/            Contratos: Auth, Listings, Auction, Chat, Betting
-│   └── usecase/               Casos de uso (fase 2)
+│   ├── model/                 User, Listing, Auction, Bet, Conversation, Message, Moderation
+│   ├── repository/            Contratos: Auth, Listings, Auction, Chat, Betting, Moderation
+│   └── usecase/               ModerateContentUseCase, ModerationRules, ImageUploadGate
 │
 ├── feature/
 │   ├── auth/        └── di/AuthModule, Splash, PhoneLogin (OTP), IdentityVerification
@@ -140,7 +142,7 @@ com.lamadriguera.app
 │   ├── chat/        └── di/ChatModule
 │   ├── betting/     └── di/BettingModule
 │   ├── payments/
-│   └── moderation/
+│   └── moderation/    └── ReportButton, AdminQueueScreen, GroupAdminPanel (+ViewModels)
 │
 └── ui/
     ├── theme/                 Color, Type, Theme (Material 3)
@@ -184,7 +186,7 @@ UI (Compose) → ViewModel → UseCase → Repository (interfaz, domain) ← Imp
 | Apuestas | `BettingHub`, `BettingGroup`, `CreateBet`, `BetDetail`, `MyBets` |
 | Perfil | `Profile`, `EditProfile`, `Settings`, `PrivacySettings` |
 | Pagos | `Payments`, `AdminPaymentQueue`, `Deposit`, `Withdraw`, `TransactionHistory` |
-| Moderación | `Moderation`, `Reports`, `ReportDetail` |
+| Moderación | `Moderation` (cola AdminQueueScreen), `GroupAdminPanel` |
 
 La barra inferior muestra: Publicaciones, Subastas, Chat, Apuestas y Perfil.
 
@@ -221,6 +223,58 @@ teléfono + código OTP.
 - **Reputación**: `profiles.reputation_avg` y `reviews_count` los calcula un
   trigger de PostgreSQL al insertar una review (solo las publicadas); la UI las
   muestra como estrellas + número de reseñas.
+
+---
+
+## Moderación de contenidos (Fase 6)
+
+Cuatro capas, de más automática a más humana:
+
+1. **IA en texto** (`ModerateContentUseCase` + `RemoteModerationApi` → Edge Function
+   `supabase/functions/moderate-text`): se ejecuta ANTES de publicar un listing, un mensaje
+   en el muro de grupos públicos, una apuesta o un nombre de perfil/grupo. Una categoría
+   grave (violencia, acoso, contenido sexual, apuestas ilegales) **bloquea** la publicación y
+   queda registrada en `moderation_actions` con la evidencia del texto.
+2. **IA en imágenes** (`ImageUploadGate` + `NsfwJsImageScanner`, modelo NSFW JS en una
+   WebView aislada + heurística de piel): la foto se comprueba **antes de subirla**; si es
+   dudosa, no se sube ("si es dudoso, no se sube").
+3. **Reglas de dominio** (`ModerationRules`): teléfonos en campos prohibidos, enlaces
+   acortadores/sospechosos, patrones de spam y referencias a apuestas ilegales.
+4. **Cola humana**: SOLO lo que la IA marca como dudoso (umbral bajo, score ≥ 0.2) entra en
+   `moderation_reviews`; se publica con revisión posterior y un admin decide.
+
+### Configuración por variable de entorno
+
+| Variable | Dónde | Valores |
+|---|---|---|
+| `MODERATION_PROVIDER` | Secreto de la Edge Function | `openai` \| `llamaguard` \| `none` (por defecto: sin IA, todo pasa) |
+| `MODERATION_API_URL` | Secreto de la Edge Function / `local.properties` (cliente) | URL del proveedor (opcional) |
+| `MODERATION_API_KEY` | Secreto de la Edge Function | Clave del proveedor |
+| `MODERATION_MODEL` | Secreto de la Edge Function | Modelo (ej. `omni-moderation-latest`) |
+| `NSFWJS_MODEL_URL` | `local.properties` (BuildConfig) | URL del modelo NSFW JS (opcional) |
+
+Despliegue: `supabase functions deploy moderate-text` (ver `supabase/README.md`).
+
+### Sanciones y evidencia
+
+- **Exactamente**: `warn`, `hide`, `suspend` (30 días exactos), `ban`. Las aplican los
+  moderadores de plataforma desde `AdminQueueScreen`; los dueños de grupo solo `warn`/`hide`
+  en SU grupo (`GroupAdminPanel`) y pueden expulsar miembros.
+- **Nunca se borra el contenido original**: se marca oculto (`hidden_at/by/reason`) y la
+  evidencia completa queda en `moderation_actions` (append-only). El contenido bloqueado
+  antes de publicar se registra igualmente con la evidencia del intento.
+- La plataforma recibe reportes de todo, pero **no modera el contenido privado** de los
+  grupos (muro, mensajes de grupo): eso es competencia del admin del grupo. El chat privado
+  solo se interviene por el flujo de disputas cifradas de la fase 3.
+
+### Entregables
+
+| Pieza | Dónde |
+|---|---|
+| `ModerateContentUseCase` | `domain/usecase/ModerateContentUseCase.kt` |
+| `AdminQueueScreen` (filtros por severidad y estado) | `feature/moderation/AdminQueueScreen.kt` |
+| `GroupAdminPanel` (reglas visibles + admin responsable) | `feature/moderation/GroupAdminPanel.kt` |
+| API de moderación configurable | `supabase/functions/moderate-text` + `MODERATION_PROVIDER` |
 
 ---
 
@@ -271,7 +325,12 @@ Tipografía del sistema para mantener el APK ligero (redes móviles limitadas).
       antifraude, cola admin/cobrador con URL firmada, confirmación/rechazo y notificaciones.
       Tarifas y cuenta parten sin configurar; las compras quedan bloqueadas hasta activarlas.
       Ver despliegue y roles en `supabase/README.md`.
-- [ ] **Fase 6 — Offline-first:** Room + WorkManager para sincronización con redes inestables.
+- [x] **Fase 6 — Moderación de contenidos:** texto con IA (OpenAI Moderation o Llama Guard)
+      configurable por variable de entorno, imágenes NSFW JS en cliente, reglas de dominio
+      (teléfonos, enlaces, spam), cola humana solo para lo dudoso, ReportButton,
+      `AdminQueueScreen`, `GroupAdminPanel`, sanciones warn/hide/suspend(30 d)/ban y
+      evidencia inmutable. Ver la sección siguiente y `supabase/README.md`.
+- [ ] **Fase 7 — Offline-first:** Room + WorkManager para sincronización con redes inestables.
 
 ---
 

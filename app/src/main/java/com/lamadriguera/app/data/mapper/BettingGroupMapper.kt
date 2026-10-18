@@ -11,7 +11,8 @@ fun BettingGroupRow.toDomain(): BettingGroup = BettingGroup(
     topic = topic,
     visibility = visibility,
     status = status,
-    createdAt = Instant.parse(createdAt)
+    createdAt = Instant.parse(createdAt),
+    rules = rules
 )
 
 fun BettingGroup.toRow(): BettingGroupRow = BettingGroupRow(
@@ -21,5 +22,6 @@ fun BettingGroup.toRow(): BettingGroupRow = BettingGroupRow(
     topic = topic,
     visibility = visibility,
     status = status,
-    createdAt = createdAt.toString()
+    createdAt = createdAt.toString(),
+    rules = rules
 )

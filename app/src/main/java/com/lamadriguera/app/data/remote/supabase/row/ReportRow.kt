@@ -21,5 +21,7 @@ data class ReportRow(
     @SerialName("handled_by")
     val handledBy: String? = null,
     @SerialName("created_at")
-    val createdAt: String
+    val createdAt: String,
+    val category: String = "other",
+    val severity: Int = 2
 )

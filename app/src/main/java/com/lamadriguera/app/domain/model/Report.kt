@@ -12,5 +12,7 @@ data class Report(
     val evidenceUrl: String? = null,
     val status: String = "open",
     val handledBy: String? = null,
-    val createdAt: Instant
+    val createdAt: Instant,
+    val category: String = "other",
+    val severity: Int = 2
 )

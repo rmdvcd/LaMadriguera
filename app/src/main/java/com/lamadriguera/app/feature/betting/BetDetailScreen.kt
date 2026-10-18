@@ -39,6 +39,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.lamadriguera.app.domain.model.BetEvidenceImage
+import com.lamadriguera.app.feature.moderation.ReportButton
+import com.lamadriguera.app.domain.model.ModerationTargetType
 import com.lamadriguera.app.domain.model.BetOutcome
 import com.lamadriguera.app.domain.model.BetStatus
 import com.lamadriguera.app.domain.usecase.BettingRules
@@ -134,7 +136,15 @@ fun BetDetailScreen(
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(bet.description, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        bet.description,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    ReportButton(targetType = ModerationTargetType.BET, targetId = bet.id)
+                }
                 Text("Monto acordado: ${formatCup(bet.stakeAmount)}", style = MaterialTheme.typography.bodyLarge)
                 if (bet.odds != null) {
                     Text("Cuota propuesta por el creador: ${formatDecimal(bet.odds)}", style = MaterialTheme.typography.bodyMedium)

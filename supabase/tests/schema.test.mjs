@@ -68,6 +68,7 @@ await db.exec(await readFile(new URL('../migrations/004_chat_encryption_disputes
 await db.exec(await readFile(new URL('../migrations/005_peer_betting.sql', import.meta.url), 'utf8'));
 await db.exec(await readFile(new URL('../migrations/006_monetization_schema.sql', import.meta.url), 'utf8'));
 await db.exec(await readFile(new URL('../migrations/007_monetization_workflow.sql', import.meta.url), 'utf8'));
+await db.exec(await readFile(new URL('../migrations/008_moderation.sql', import.meta.url), 'utf8'));
 await db.exec(`
   INSERT INTO auth.users(id) VALUES ('${user}'), ('${peer}'), ('${outsider}'), ('${admin}'), ('${bettor}'), ('${acceptor}'), ('${minor}');
   INSERT INTO public.categories(id, name) VALUES ('${category}', 'General');
@@ -88,7 +89,7 @@ await db.exec(`
 
 test('all application tables have RLS enabled', async () => {
   const result = await db.query("SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND rowsecurity");
-  assert.equal(count(result), 26);
+  assert.equal(count(result), 28);
 });
 
 test('Kotlin row wire names match every SQL column', async () => {
@@ -99,7 +100,7 @@ test('Kotlin row wire names match every SQL column', async () => {
     MonetizationProduct: 'monetization_products', MonetizationSettings: 'monetization_settings',
     Boost: 'boosts', BettingGroup: 'betting_groups', BettingGroupMember: 'betting_group_members',
     Bet: 'bets', BetEvent: 'bet_events', BettingControls: 'betting_controls',
-    ModerationAction: 'moderation_actions',
+    ModerationAction: 'moderation_actions', GroupMessage: 'group_messages', ModerationReview: 'moderation_reviews',
     ConversationKey: 'conversation_keys', DisputeTicket: 'dispute_tickets',
     UserNotification: 'user_notifications'
   };
@@ -780,4 +781,182 @@ test('dispute transcripts are written by the service and are moderator-only', as
   assert.equal(count(await as(user, 'SELECT count(*) FROM public.dispute_transcripts')), 0);
   assert.equal(count(await as(outsider, 'SELECT count(*) FROM public.dispute_transcripts')), 0);
   await assert.rejects(as(user, `INSERT INTO public.dispute_transcripts(ticket_id, conversation_id, reason, transcript) VALUES ('${approvedTicketId}', '${conversation2}', 'x', '[]'::jsonb)`), /row-level security|permission denied/);
+});
+
+test('group messages: only members post; direct writes are denied; hide preserves the row with evidence', async () => {
+  // Un test anterior expulsó a peer del grupo; vuelve a ser miembro.
+  await as(admin, `INSERT INTO public.betting_group_members(group_id, user_id) VALUES ('${group}', '${peer}') ON CONFLICT DO NOTHING`, 'service_role', 'admin');
+  await assert.rejects(
+    as(outsider, `SELECT * FROM public.post_group_message('${group}', 'Hola a todos')`),
+    /Solo los miembros/
+  );
+  await assert.rejects(
+    as(peer, `INSERT INTO public.group_messages(group_id, sender_id, body) VALUES ('${group}', '${peer}', 'hack')`),
+    /permission denied/
+  );
+  const message = (await as(peer, `SELECT * FROM public.post_group_message('${group}', '¿Alguien apuesta hoy?')`)).rows[0];
+  assert.equal(message.body, '¿Alguien apuesta hoy?');
+  assert.equal(message.hidden_at, null);
+
+  const action = (await as(admin, `SELECT * FROM public.apply_moderation_action(
+    'group_message', '${message.id}', 'hide', 'Contenido repetitivo', 'spam', 2, null
+  )`, 'authenticated', 'admin')).rows[0];
+  assert.equal(action.action, 'hide');
+  assert.equal(action.source, 'admin');
+  assert.ok(action.evidence, 'la evidencia del contenido se guarda');
+  assert.equal(action.evidence.id, message.id);
+
+  // Nunca se borra: la fila permanece marcada como oculta.
+  const row = (await db.query(`SELECT hidden_at, hidden_reason FROM public.group_messages WHERE id = '${message.id}'`)).rows[0];
+  assert.ok(row.hidden_at);
+  assert.equal(row.hidden_reason, 'Contenido repetitivo');
+  assert.equal(count(await db.query(`SELECT count(*) FROM public.group_messages WHERE id = '${message.id}'`)), 1);
+});
+
+test('human queue: reports enqueue automatically and only authors flag their own content', async () => {
+  const before = count(await as(admin, 'SELECT count(*) FROM public.moderation_reviews', 'authenticated', 'admin'));
+
+  const report = (await as(peer, `INSERT INTO public.reports(reporter_id, target_type, target_id, reason, category, severity)
+    VALUES ('${peer}', 'listing', '${listing}', 'Vende cosas raras', 'other', 3) RETURNING id`)).rows[0];
+  const fromReport = await as(admin, `SELECT * FROM public.moderation_reviews WHERE report_id = '${report.id}'`, 'authenticated', 'admin');
+  assert.equal(fromReport.rows.length, 1);
+  assert.equal(fromReport.rows[0].source, 'user_report');
+  assert.equal(fromReport.rows[0].severity, 3);
+
+  await assert.rejects(
+    as(peer, `SELECT * FROM public.flag_moderation_review('listing', '${listing}', 'spam', 2, 'x', null, 'openai', null)`),
+    /Solo puedes marcar tu propio/
+  );
+  const flagged = (await as(user, `SELECT * FROM public.flag_moderation_review(
+    'listing', '${paused}', 'spam', 2, 'extracto dudoso', '{"text":"extracto dudoso"}'::jsonb, 'openai', '{"spam":0.3}'::jsonb
+  )`)).rows[0];
+  assert.equal(flagged.source, 'ai');
+  assert.equal(flagged.status, 'pending');
+  assert.equal(flagged.ai_provider, 'openai');
+
+  // Idempotente: un segundo flag devuelve la misma revisión abierta.
+  const again = (await as(user, `SELECT * FROM public.flag_moderation_review(
+    'listing', '${paused}', 'spam', 2, 'extracto dudoso', null, 'openai', null
+  )`)).rows[0];
+  assert.equal(again.id, flagged.id);
+
+  const after = count(await as(admin, 'SELECT count(*) FROM public.moderation_reviews', 'authenticated', 'admin'));
+  assert.equal(after, before + 2);
+
+  // La cola NO es pública: un miembro sin rol no lee revisiones.
+  assert.equal(count(await as(peer, 'SELECT count(*) FROM public.moderation_reviews')), 0);
+});
+
+test('AI blocks before publish are logged in moderation_actions with evidence', async () => {
+  const block = (await as(user, `SELECT * FROM public.record_ai_moderation_action(
+    'listing', '${listing}', 'violence', 5, 'Bloqueado por moderación automática', '{"text":"texto intentado"}'::jsonb
+  )`)).rows[0];
+  assert.equal(block.action, 'block');
+  assert.equal(block.source, 'ai');
+  assert.equal(block.actor_id, user);
+  assert.equal(block.evidence.text, 'texto intentado');
+});
+
+test('sanctions warn/hide/suspend(30 days)/ban record actions and never delete content', async () => {
+  // warn: notifica al autor sin tocar el contenido.
+  const warn = (await as(admin, `SELECT * FROM public.apply_moderation_action(
+    'listing', '${listing}', 'warn', 'Primera advertencia', 'spam', 2, null
+  )`, 'authenticated', 'admin')).rows[0];
+  assert.equal(warn.action, 'warn');
+  assert.ok(count(await db.query(`SELECT count(*) FROM public.user_notifications WHERE user_id = '${user}' AND type = 'moderation_warn'`)) >= 1);
+
+  // hide: la fila se marca oculta y la evidencia queda en el log.
+  const hide = (await as(admin, `SELECT * FROM public.apply_moderation_action(
+    'listing', '${listing}', 'hide', 'Contenido engañoso', 'spam', 3, null
+  )`, 'authenticated', 'admin')).rows[0];
+  assert.equal(hide.action, 'hide');
+  assert.ok(hide.evidence, 'la evidencia del contenido original se conserva');
+  const hiddenRow = (await db.query(`SELECT hidden_at, hidden_by, title, description FROM public.listings WHERE id = '${listing}'`)).rows[0];
+  assert.ok(hiddenRow.hidden_at);
+  assert.equal(hiddenRow.hidden_by, admin);
+  assert.ok(hiddenRow.title.length > 0, 'el contenido original no se borra');
+  assert.ok(hiddenRow.description.length > 0, 'la descripción original se conserva');
+  assert.equal(count(await db.query(`SELECT count(*) FROM public.listings WHERE id = '${listing}'`)), 1);
+
+  // suspend: 30 días exactos.
+  const suspend = (await as(admin, `SELECT * FROM public.apply_moderation_action(
+    'profile', '${peer}', 'suspend', 'Reincidencia', 'other', 4, null
+  )`, 'authenticated', 'admin')).rows[0];
+  assert.equal(suspend.action, 'suspend');
+  const suspended = (await db.query(`SELECT status, suspended_until FROM public.users WHERE id = '${peer}'`)).rows[0];
+  assert.equal(suspended.status, 'suspended');
+  const days = (new Date(suspended.suspended_until) - Date.now()) / 86400000;
+  assert.ok(days > 29 && days < 31, `suspensión de 30 días, no ${days}`);
+
+  // ban.
+  const ban = (await as(admin, `SELECT * FROM public.apply_moderation_action(
+    'profile', '${outsider}', 'ban', 'Expulsión definitiva', 'other', 5, null
+  )`, 'authenticated', 'admin')).rows[0];
+  assert.equal(ban.action, 'ban');
+  assert.equal((await db.query(`SELECT status FROM public.users WHERE id = '${outsider}'`)).rows[0].status, 'banned');
+
+  // Solo la plataforma suspende/expulsa; los admins de grupo no.
+  await assert.rejects(
+    as(user, `SELECT * FROM public.apply_moderation_action('profile', '${peer}', 'ban', 'x', 'other', 5, null)`),
+    /No tienes permisos/
+  );
+});
+
+test('group admins moderate only their own group content; platform never moderates private chat', async () => {
+  const message = (await as(peer, `SELECT * FROM public.post_group_message('${group}', 'Mensaje dudoso del muro')`)).rows[0];
+
+  // El owner del grupo puede avisar/ocultar en SU grupo (fuente group_admin).
+  const hide = (await as(user, `SELECT * FROM public.apply_moderation_action(
+    'group_message', '${message.id}', 'hide', 'Fuera de tema', 'other', 2, null
+  )`)).rows[0];
+  assert.equal(hide.source, 'group_admin');
+
+  // Un miembro que no es owner no sanciona.
+  await assert.rejects(
+    as(peer, `SELECT * FROM public.apply_moderation_action('group_message', '${message.id}', 'warn', 'x', 'other', 1, null)`),
+    /No tienes permisos/
+  );
+  // Ni sobre contenido de grupos ajenos.
+  await assert.rejects(
+    as(bettor, `SELECT * FROM public.apply_moderation_action('group_message', '${message.id}', 'hide', 'x', 'other', 2, null)`),
+    /No tienes permisos/
+  );
+
+  // El chat privado se reporta pero no se modera.
+  await assert.rejects(
+    as(admin, `SELECT * FROM public.apply_moderation_action('message', '20000000-0000-0000-0000-000000000001', 'hide', 'x', 'other', 2, null)`, 'authenticated', 'admin'),
+    /no modera el chat privado/
+  );
+});
+
+test('group moderation queue is owner-scoped and dismissals are recorded', async () => {
+  await assert.rejects(
+    as(peer, `SELECT * FROM public.group_moderation_queue('${group}')`),
+    /Solo el administrador/
+  );
+
+  const message = (await as(peer, `SELECT * FROM public.post_group_message('${group}', 'Mensaje que se reporta')`)).rows[0];
+  const report = (await as(peer, `INSERT INTO public.reports(reporter_id, target_type, target_id, reason, category, severity)
+    VALUES ('${peer}', 'group_message', '${message.id}', 'Fuera de tema', 'other', 1) RETURNING id`)).rows[0];
+
+  const queue = await as(user, `SELECT * FROM public.group_moderation_queue('${group}')`);
+  assert.ok(queue.rows.some((row) => row.report_id === report.id), 'el reporte entra a la cola del grupo');
+
+  const pending = (await as(user, `SELECT * FROM public.moderation_reviews WHERE report_id = '${report.id}'`)).rows[0];
+  const dismissed = (await as(user, `SELECT * FROM public.dismiss_moderation_review('${pending.id}', 'Sin sanción')`)).rows[0];
+  assert.equal(dismissed.status, 'dismissed');
+  assert.equal(dismissed.handled_by, user);
+
+  await assert.rejects(
+    as(peer, `SELECT * FROM public.dismiss_moderation_review('${pending.id}', 'x')`),
+    /ya fue resuelta|No tienes permisos/
+  );
+});
+
+test('suspensions expire after 30 days through the trusted sweep', async () => {
+  await as(admin, `UPDATE public.users SET status = 'suspended', suspended_until = now() - interval '1 day' WHERE id = '${minor}'`, 'service_role', 'admin');
+  assert.equal((await as(admin, 'SELECT public.expire_user_suspensions()', 'authenticated', 'admin')).rows[0].expire_user_suspensions, 1);
+  const revived = (await db.query(`SELECT status, suspended_until FROM public.users WHERE id = '${minor}'`)).rows[0];
+  assert.equal(revived.status, 'active');
+  assert.equal(revived.suspended_until, null);
 });

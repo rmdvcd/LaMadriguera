@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/schema.test.mjs tests/dispute-crypto.test.mjs"
+    "test": "node --test tests/schema.test.mjs tests/dispute-crypto.test.mjs tests/moderation-mapping.test.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.3.14"

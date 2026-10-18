@@ -41,5 +41,11 @@ data class BetRow(
     @SerialName("decision_note")
     val decisionNote: String? = null,
     @SerialName("created_at")
-    val createdAt: String
+    val createdAt: String,
+    @SerialName("hidden_at")
+    val hiddenAt: String? = null,
+    @SerialName("hidden_by")
+    val hiddenBy: String? = null,
+    @SerialName("hidden_reason")
+    val hiddenReason: String? = null
 )

@@ -19,3 +19,14 @@ SUPABASE_ANON_KEY=tu-anon-key-publica
 # (cuyas privadas están publicadas a propósito; nunca lo uses en producción).
 # DISPUTE_ADMIN_PUB=base64-de-32-bytes
 # DISPUTE_MODERATOR_PUB=base64-de-32-bytes
+
+# Moderación de texto (opcional). URL del endpoint de moderación. Si se omite,
+# la app llama a la Edge Function Supabase `moderate-text`, cuyos secretos del
+# proyecto (MODERATION_PROVIDER=openai|llamaguard|none, MODERATION_API_URL,
+# MODERATION_API_KEY) eligen la API de moderación real.
+# MODERATION_API_URL=https://tu-proyecto.supabase.co/functions/v1/moderate-text
+
+# NSFW.js en cliente (opcional). URL del bundle de NSFW.js/TensorFlow.js para
+# clasificar imágenes ANTES de subirlas. Si se omite, se usa la heurística
+# offline de respaldo (ante la duda, la imagen no se sube).
+# NSFWJS_MODEL_URL=https://cdn.jsdelivr.net/npm/nsfwjs@2.4.2/dist/nsfwjs.min.js

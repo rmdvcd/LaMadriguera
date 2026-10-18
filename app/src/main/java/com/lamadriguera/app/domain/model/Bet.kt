@@ -23,8 +23,14 @@ data class Bet(
     /** Solo se establece cuando el administrador del grupo decide una disputa. */
     val decisionBy: String? = null,
     val decisionNote: String? = null,
-    val createdAt: Instant
-)
+    val createdAt: Instant,
+    /** Ocultación por moderación: la fila permanece (nunca se borra) con evidencia. */
+    val hiddenAt: Instant? = null,
+    val hiddenBy: String? = null,
+    val hiddenReason: String? = null
+) {
+    val isHidden: Boolean get() = hiddenAt != null
+}
 
 /** Una acción inmutable del historial de una apuesta. */
 data class BetEvent(

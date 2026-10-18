@@ -5,12 +5,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lamadriguera.app.core.result.Result
 import com.lamadriguera.app.domain.model.BetDraft
+import com.lamadriguera.app.domain.model.ModeratedContent
+import com.lamadriguera.app.domain.model.ModerationDecision
+import com.lamadriguera.app.domain.model.ModerationTargetType
 import com.lamadriguera.app.domain.model.BettingControls
 import com.lamadriguera.app.domain.model.BettingGroup
 import com.lamadriguera.app.domain.repository.AuthRepository
 import com.lamadriguera.app.domain.repository.BettingRepository
 import com.lamadriguera.app.domain.repository.IdentityVerificationsRepository
 import com.lamadriguera.app.domain.usecase.BettingRules
+import com.lamadriguera.app.domain.usecase.ModerateContentUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.math.BigDecimal
 import javax.inject.Inject
@@ -59,7 +63,8 @@ class CreateBetViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val authRepository: AuthRepository,
     private val bettingRepository: BettingRepository,
-    private val identityVerifications: IdentityVerificationsRepository
+    private val identityVerifications: IdentityVerificationsRepository,
+    private val moderateContent: ModerateContentUseCase
 ) : ViewModel() {
 
     private val groupId: String = savedStateHandle["groupId"].orEmpty()
@@ -185,11 +190,42 @@ class CreateBetViewModel @Inject constructor(
                 stakeAmount = amount,
                 odds = state.parsedOdds
             )
-            _uiState.value = when (val result = bettingRepository.createBet(draft)) {
-                is Result.Success -> _uiState.value.copy(
-                    isSubmitting = false,
-                    createdBetId = result.data.id
+            // Moderación de texto antes de publicar la apuesta en el grupo.
+            val decision = when (
+                val moderation = moderateContent.moderate(
+                    ModeratedContent(targetType = ModerationTargetType.BET, body = draft.description)
                 )
+            ) {
+                is Result.Success -> moderation.data
+                is Result.Error -> {
+                    _uiState.value = _uiState.value.copy(
+                        isSubmitting = false,
+                        errorMessage = moderation.message ?: "No se pudo verificar el contenido."
+                    )
+                    return@launch
+                }
+            }
+            if (decision is ModerationDecision.Blocked) {
+                _uiState.value = _uiState.value.copy(
+                    isSubmitting = false,
+                    errorMessage = decision.userMessage
+                )
+                return@launch
+            }
+            _uiState.value = when (val result = bettingRepository.createBet(draft)) {
+                is Result.Success -> {
+                    if (decision is ModerationDecision.Doubtful) {
+                        moderateContent.flagDoubtful(
+                            targetType = ModerationTargetType.BET,
+                            targetId = result.data.id,
+                            decision = decision
+                        )
+                    }
+                    _uiState.value.copy(
+                        isSubmitting = false,
+                        createdBetId = result.data.id
+                    )
+                }
                 is Result.Error -> _uiState.value.copy(
                     isSubmitting = false,
                     errorMessage = result.message ?: "No se pudo crear la apuesta."

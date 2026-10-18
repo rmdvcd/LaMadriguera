@@ -56,6 +56,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import com.lamadriguera.app.R
+import com.lamadriguera.app.feature.moderation.ReportButton
+import com.lamadriguera.app.domain.model.ModerationTargetType
 import com.lamadriguera.app.domain.model.MessageContent
 import com.lamadriguera.app.domain.model.ChatMessage
 import com.lamadriguera.app.domain.model.MessageExpiry
@@ -432,6 +434,14 @@ private fun MessageBubble(message: ChatMessage) {
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (!message.isMine) {
+                        Spacer(modifier = Modifier.width(2.dp))
+                        ReportButton(
+                            targetType = ModerationTargetType.MESSAGE,
+                            targetId = message.id,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }

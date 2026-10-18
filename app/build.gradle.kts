@@ -58,6 +58,23 @@ android {
             "DISPUTE_MODERATOR_PUB",
             "\"${secretOrPlaceholder("DISPUTE_MODERATOR_PUB", "placeholder-dev-key")"}\""
         )
+
+        // Moderación de texto: endpoint de la API configurable por variable de
+        // entorno. Vacío ⇒ Edge Function Supabase `moderate-text` (que a su vez
+        // lee MODERATION_PROVIDER / MODERATION_API_URL / MODERATION_API_KEY).
+        buildConfigField(
+            "String",
+            "MODERATION_API_URL",
+            "\"${secretOrPlaceholder("MODERATION_API_URL", "")}\""
+        )
+
+        // NSFW.js en cliente: URL del bundle/modelo para el WebView. Vacío ⇒
+        // solo la heurística offline de respaldo.
+        buildConfigField(
+            "String",
+            "NSFWJS_MODEL_URL",
+            "\"${secretOrPlaceholder("NSFWJS_MODEL_URL", "")}\""
+        )
     }
     buildTypes {
         debug {

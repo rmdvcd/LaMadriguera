@@ -17,6 +17,7 @@ import com.lamadriguera.app.domain.repository.AuthRepository
 import com.lamadriguera.app.domain.repository.BettingRepository
 import com.lamadriguera.app.domain.repository.IdentityVerificationsRepository
 import com.lamadriguera.app.domain.usecase.BettingRules
+import com.lamadriguera.app.domain.usecase.ImageUploadGate
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,7 +59,8 @@ class BetDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val authRepository: AuthRepository,
     private val bettingRepository: BettingRepository,
-    private val identityVerifications: IdentityVerificationsRepository
+    private val identityVerifications: IdentityVerificationsRepository,
+    private val imageUploadGate: ImageUploadGate
 ) : ViewModel() {
 
     private val betId: String = savedStateHandle["betId"].orEmpty()
@@ -185,8 +187,11 @@ class BetDetailViewModel @Inject constructor(
             _uiState.update { it.copy(errorMessage = error, message = null) }
             return
         }
-        performAction("Resultado registrado.") {
-            bettingRepository.submitResult(betId, outcome, evidenceText, image)
+        viewModelScope.launch {
+            if (!ensureImageAllowed(image)) return@launch
+            performAction("Resultado registrado.") {
+                bettingRepository.submitResult(betId, outcome, evidenceText, image)
+            }
         }
     }
 
@@ -196,8 +201,34 @@ class BetDetailViewModel @Inject constructor(
             _uiState.update { it.copy(errorMessage = error, message = null) }
             return
         }
-        performAction("Apuesta en disputa. El administrador del grupo decidirá.") {
-            bettingRepository.openDispute(betId, evidenceText, image)
+        viewModelScope.launch {
+            if (!ensureImageAllowed(image)) return@launch
+            performAction("Apuesta en disputa. El administrador del grupo decidirá.") {
+                bettingRepository.openDispute(betId, evidenceText, image)
+            }
+        }
+    }
+
+    /**
+     * IA en imágenes (NSFW.js en cliente) antes de subir evidencias:
+     * si la captura es dudosa, no se sube.
+     */
+    private suspend fun ensureImageAllowed(image: BetEvidenceImage?): Boolean {
+        if (image == null) return true
+        return when (val gate = imageUploadGate.check(image.bytes)) {
+            is Result.Success -> when (val outcome = gate.data) {
+                is ImageUploadGate.Outcome.Allowed -> true
+                is ImageUploadGate.Outcome.Refused -> {
+                    _uiState.update { it.copy(errorMessage = outcome.message, message = null) }
+                    false
+                }
+            }
+            is Result.Error -> {
+                _uiState.update {
+                    it.copy(errorMessage = gate.message ?: "No se pudo verificar la captura.", message = null)
+                }
+                false
+            }
         }
     }
 

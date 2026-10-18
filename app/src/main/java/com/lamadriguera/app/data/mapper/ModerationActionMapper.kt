@@ -14,7 +14,8 @@ fun ModerationActionRow.toDomain(): ModerationAction = ModerationAction(
     action = action,
     reason = reason,
     actorId = actorId,
-    createdAt = Instant.parse(createdAt)
+    createdAt = Instant.parse(createdAt),
+    evidence = evidence
 )
 
 fun ModerationAction.toRow(): ModerationActionRow = ModerationActionRow(
@@ -27,5 +28,6 @@ fun ModerationAction.toRow(): ModerationActionRow = ModerationActionRow(
     action = action,
     reason = reason,
     actorId = actorId,
-    createdAt = createdAt.toString()
+    createdAt = createdAt.toString(),
+    evidence = evidence
 )

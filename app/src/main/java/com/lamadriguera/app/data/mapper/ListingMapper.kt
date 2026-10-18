@@ -23,7 +23,10 @@ fun ListingRow.toDomain(): Listing = Listing(
     boostedUntil = boostedUntil?.let(Instant::parse),
     createdAt = Instant.parse(createdAt),
     photoUrl = photoUrl,
-    visibility = visibility
+    visibility = visibility,
+    hiddenAt = hiddenAt?.let(Instant::parse),
+    hiddenBy = hiddenBy,
+    hiddenReason = hiddenReason
 )
 
 fun Listing.toRow(): ListingRow = ListingRow(
@@ -45,5 +48,8 @@ fun Listing.toRow(): ListingRow = ListingRow(
     boostedUntil = boostedUntil?.toString(),
     createdAt = createdAt.toString(),
     photoUrl = photoUrl,
-    visibility = visibility
+    visibility = visibility,
+    hiddenAt = hiddenAt?.toString(),
+    hiddenBy = hiddenBy,
+    hiddenReason = hiddenReason
 )
