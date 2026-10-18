@@ -60,6 +60,9 @@ abstract class RepositoryModule {
     abstract fun bindBets(impl: SupabaseBetsRepository): BetsRepository
 
     @Binds @Singleton
+    abstract fun bindBetting(impl: SupabaseBettingRepository): BettingRepository
+
+    @Binds @Singleton
     abstract fun bindModerationActions(impl: SupabaseModerationActionsRepository): ModerationActionsRepository
 
 }

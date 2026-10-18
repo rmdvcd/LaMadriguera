@@ -2,7 +2,7 @@ package com.lamadriguera.app.data.repository
 
 /**
  * Detección mínima de formato de imagen por firmas de bytes.
- * Solo se aceptan JPEG/PNG para las fotos del carnet.
+ * Solo se aceptan JPEG/PNG para el carnet y las evidencias de apuestas.
  */
 internal object ImageFormat {
 

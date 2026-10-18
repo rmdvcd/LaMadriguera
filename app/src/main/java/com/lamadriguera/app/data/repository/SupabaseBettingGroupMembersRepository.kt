@@ -8,6 +8,7 @@ import com.lamadriguera.app.domain.repository.BettingGroupMembersRepository
 import io.github.jan.supabase.SupabaseClient
 import javax.inject.Inject
 
+/** Read-only membership table access; invites/removals use BettingRepository RPCs. */
 class SupabaseBettingGroupMembersRepository @Inject constructor(client: SupabaseClient) :
     SupabaseTableRepository<BettingGroupMember, BettingGroupMemberRow>(
         client = client,
@@ -16,6 +17,6 @@ class SupabaseBettingGroupMembersRepository @Inject constructor(client: Supabase
         serializer = BettingGroupMemberRow.serializer(),
         toDomain = { it.toDomain() },
         toRow = { it.toRow() },
-        insertColumns = setOf("id", "group_id", "user_id"),
+        insertColumns = emptySet(),
         updateColumns = emptySet()
     ), BettingGroupMembersRepository

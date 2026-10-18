@@ -32,6 +32,16 @@ de disputa: `profiles.chat_public_key` (X25519 por dispositivo), `conversation_k
 cuándo, ticket y motivo), `user_notifications` + `notify_thread_decrypted()` (aviso a
 ambas partes) y `dispute_transcripts` (transcripción del descifrado, solo moderación).
 
+`migrations/005_peer_betting.sql` implementa apuestas entre usuarios, sin procesar pagos:
+cuotas opcionales que solo propone el creador (el valor por defecto antiguo `1` se elimina),
+controles por usuario (límite diario inicial de 1000 CUP y autoexclusión de 30 días),
+registro append-only `bet_events`, evidencias en bucket privado, alta/aceptación/resolución
+atómica por RPC y permisos de owner para invitar/expulsar. Las RPC de crear y aceptar exigen
+cuenta activa, `verification_level='identity'`, carnet aprobado de tipo `carnet` y 18 años
+cumplidos. El día de uso del límite se calcula en UTC; propuestas creadas hoy y apuestas
+aceptadas hoy cuentan en el límite. La autoexclusión bloquea nuevas apuestas, pero no impide
+cerrar o disputar una ya aceptada.
+
 Ejecutar desde el SQL Editor de Supabase como `postgres`, o con conexión administrativa:
 
 ```sh
@@ -39,11 +49,12 @@ psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/001_initial_sc
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/002_auth_identity_privacy.sql
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/003_listings_auctions.sql
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/004_chat_encryption_disputes.sql
+psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/005_peer_betting.sql
 ```
 
 No poner la contraseña de PostgreSQL ni la service-role key en Android/local.properties.
-Las 15 tablas solicitadas y `betting_group_members` tienen RLS activada, índices, claves
-foráneas y restricciones. Los UUID son `String` en Kotlin; el backend valida el formato.
+Las tablas de la aplicación tienen RLS activada, índices, claves foráneas y restricciones.
+Los UUID son `String` en Kotlin; el backend valida el formato.
 Los IDs se pueden generar con `UUID.randomUUID().toString()`; `profiles` usa `user_id`.
 
 ### Identidad, roles y confianza
@@ -117,7 +128,7 @@ Gradle las copia a `BuildConfig`. `SupabaseClientProvider`, singleton Hilt, inst
 Postgrest, Storage y Realtime con OkHttp y una serialización JSON común. El JWT de la sesión
 Auth se aplica automáticamente a las peticiones; no se envía un `user_id` como autorización.
 
-- `data/remote/supabase/row/*Row.kt`: 16 data classes `@Serializable`, con `@SerialName`
+- `data/remote/supabase/row/*Row.kt`: 22 data classes `@Serializable`, con `@SerialName`
   para nombres SQL y enums con valores de wire en minúsculas.
 - `domain/model`: modelos sin detalles de PostgREST, `BigDecimal` para todo `numeric`,
   `Instant`/`LocalDate` para fechas y `ByteArray` para `bytea`.
@@ -139,8 +150,9 @@ Auth se aplica automáticamente a las peticiones; no se envía un `user_id` como
 | ReportsRepository, PaymentsRepository | list/find/create |
 | BoostsRepository, ModerationActionsRepository | list/find |
 | BettingGroupsRepository | list/find/create/update (nombre, tema, visibilidad) |
-| BettingGroupMembersRepository | list/find/create/delete |
-| BetsRepository | list/find/create |
+| BettingGroupMembersRepository | list/find (solo lectura; altas/bajas por RPC) |
+| BetsRepository | list/find (solo lectura; cambios por RPC) |
+| BettingRepository | grupos, historial, aceptar, resolver/disputar, evidencias y controles por RPC |
 
 `list(page = 0, pageSize = 50)` acepta tamaños 1..100, ordena por PK para paginar de forma
 estable y devuelve únicamente filas visibles por RLS. No implementa búsqueda de negocio.
@@ -164,22 +176,43 @@ class LoadListings @Inject constructor(private val repository: ListingsRepositor
 }
 ```
 
-### Límites deliberados de los repositorios base
+### Apuestas entre usuarios
 
-Esta entrega es la persistencia base, no los flujos completos de features. Los contratos
-previos `AuthRepository`, `AuctionRepository`, `ChatRepository` y `BettingRepository`
-permanecen reservados para sus flujos (login, puja atómica, suscripción Realtime y aceptación
-atómica). No se enlazan a implementaciones ficticias. Los modelos provisionales de usuarios,
-anuncios, mensajes y apuestas se ajustaron al SQL; no existe una tabla `auctions` separada:
-las subastas se representan con `listings.sale_mode` y `auction_config`.
+- La UI usa `BettingGroupScreen`, `CreateBetScreen` y `BetDetailScreen`, con sus ViewModels;
+  `BettingRepository` queda enlazado en Hilt a `SupabaseBettingRepository`.
+- Owner = administrador del grupo. Invita por teléfono confirmado en Supabase Auth y expulsa
+  mediante RPC; el owner no puede expulsarse a sí mismo. No se usa `users.phone` editable
+  para conceder membresía. Los grupos públicos se pueden descubrir y los usuarios pueden
+  unirse; los grupos privados solo aparecen para sus miembros.
+- Crear y aceptar una apuesta son RPC transaccionales. El cliente no tiene `INSERT/UPDATE`
+  directo sobre `bets` ni puede escribir estados, propietario, aceptante o decisión.
+  `BetsRepository` y `BettingGroupMembersRepository` son de solo lectura.
+- Toda apuesta requiere una cuenta activa, `verification_level='identity'`, carnet de
+  identidad aprobado y edad de 18 años o más derivada de la fecha de nacimiento del carnet.
+  El mismo control se aplica al crear y aceptar; no se confía en el dato local del dispositivo.
+- Cada usuario tiene límite inicial de `1000 CUP`, configurable entre 1 y 1 000 000 CUP.
+  Propuestas creadas hoy (incluidas las abiertas) y apuestas aceptadas hoy consumen el límite;
+  las operaciones bloquean la fila de control para evitar saltarse el tope con peticiones
+  paralelas. El día se calcula en UTC.
+- «No apostar más» establece una autoexclusión no cancelable de 30 días. Bloquea crear y
+  aceptar, no la resolución de una apuesta ya aceptada.
+- La cuota es opcional y solo muestra el valor que introdujo el creador. Nunca se crea una
+  cuota fija desde la plataforma. La moneda permitida es CUP.
+- Cualquier participante puede registrar el resultado con texto o captura. Si las dos partes
+  indican resultados distintos, o abren una disputa, `status='disputed'`; solo el owner del
+  grupo decide `settled_creator`, `settled_acceptor` o `void`, con una nota. `bet_events`
+  conserva el historial completo e inmutable, con evidencias en el bucket privado
+  `bet-evidence`; el cliente no puede borrar capturas ya subidas.
+- La app no procesa ni garantiza pagos: **el pago se acuerda y ejecuta fuera de la app**.
+  No hay escrow, saldo, transferencia, comisión ni confirmación de pago en este feature.
 
-Antes de producción se necesitan procesos backend para activación/verificación, estados de
-subasta, comparación atómica/antifraude de pujas, aceptación y liquidación de apuestas,
-confirmación de Transfermóvil, aplicación de boosts, cálculo de reputación y moderación.
-Los documentos y claves deben cifrarse antes de persistir: `bytea` no cifra por sí mismo.
-También deben implementarse purga de documentos según `retention_until`, purga de mensajes
-según `expires_at`, Storage policies y gestión/rotación de claves. La RLS no elimina archivos
-ni aplica automáticamente políticas de retención.
+Antes de producción aún se requieren procesos backend para activación/verificación,
+estados y antifraude de subastas, confirmación de Transfermóvil, boosts, cálculo de
+reputación y moderación. Los documentos y claves deben cifrarse antes de persistir: `bytea`
+no cifra por sí mismo. También deben implementarse purga de documentos según
+`retention_until`, purga de mensajes según `expires_at`, política de retención para las
+capturas de apuestas y gestión/rotación de claves. La RLS no elimina archivos ni aplica
+automáticamente políticas de retención.
 
 ## Pruebas
 
@@ -192,13 +225,12 @@ npm test --prefix supabase
 
 PGlite ejecuta PostgreSQL real embebido en WASM. Solo se simulan las funciones/tablas de
 Supabase Auth y el esquema `storage`; las migraciones se ejecutan sin modificaciones. Las
-pruebas cubren RLS en las 16 tablas, acceso propio, visitante, participante, moderador,
-admin, miembros y no miembros, permisos de columnas, suplantación de roles, restricciones y
-precisión numeric. También comparan las columnas y los enums SQL con los nombres de wire de
-Kotlin para detectar divergencias, y verifican las reglas de la Fase 1: aprobación/rechazo
-de identidad y su efecto en `users`, trigger de reputación, alias automático, política de
-revelación por defecto y el bucket privado de documentos.
-Esto no sustituye una prueba de integración en un proyecto Supabase antes de desplegar.
+pruebas cubren RLS, acceso propio/participante/owner, permisos de columna, restricciones y
+precisión numeric; también comparan columnas y enums SQL con los nombres wire de Kotlin.
+Incluyen las reglas de apuestas: carnet y mayoría de edad, moneda/cuotas opcionales, tope
+atómico, evidencia, transición a disputa, decisión del owner, autoexclusión de 30 días,
+Storage privado e historial append-only. Esto no sustituye una prueba de integración en un
+proyecto Supabase antes de desplegar.
 
 ### JVM (requiere JDK 17, Android SDK 35 y dependencias Gradle)
 
@@ -206,7 +238,8 @@ Esto no sustituye una prueba de integración en un proyecto Supabase antes de de
 ./gradlew testDebugUnitTest
 ```
 
-`RowMappersTest`: round-trip row/dominio y JSON de las 16 tablas, nombres snake_case,
+`RowMappersTest`: round-trip row/dominio y JSON de las tablas, nombres snake_case,
 defaults/nulls, enums, precisión decimal, timestamps con offset, fecha civil y bytea
-(incluyendo referencias malformadas). `RepositoryRequestTest` cubre Result y cancelación.
+(incluyendo referencias malformadas). `BettingRulesTest` cubre elegibilidad 18+, límites y
+evidencia; `RepositoryRequestTest` cubre Result y cancelación.
 Las pruebas no requieren credenciales ni conexión a Supabase.
