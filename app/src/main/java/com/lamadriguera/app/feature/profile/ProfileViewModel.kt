@@ -6,6 +6,7 @@ import com.lamadriguera.app.core.result.Result
 import com.lamadriguera.app.core.result.UiState
 import com.lamadriguera.app.domain.model.AuthSession
 import com.lamadriguera.app.domain.repository.AuthRepository
+import com.lamadriguera.app.domain.repository.NotificationsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,7 +26,8 @@ data class ProfileUiExtras(
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val notificationsRepository: NotificationsRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<UiState<ProfileScreenData>>(UiState.Loading)
@@ -60,6 +62,9 @@ class ProfileViewModel @Inject constructor(
 
     fun logout() {
         viewModelScope.launch {
+            // Con la sesión aún viva: borra el token FCM del dispositivo
+            // (sin token registrado, sin avisos hacia esta cuenta).
+            notificationsRepository.unregisterPushToken()
             authRepository.signOut()
             _extras.update { it.copy(loggedOut = true) }
         }

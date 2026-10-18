@@ -69,6 +69,7 @@ await db.exec(await readFile(new URL('../migrations/005_peer_betting.sql', impor
 await db.exec(await readFile(new URL('../migrations/006_monetization_schema.sql', import.meta.url), 'utf8'));
 await db.exec(await readFile(new URL('../migrations/007_monetization_workflow.sql', import.meta.url), 'utf8'));
 await db.exec(await readFile(new URL('../migrations/008_moderation.sql', import.meta.url), 'utf8'));
+await db.exec(await readFile(new URL('../migrations/009_push_notifications.sql', import.meta.url), 'utf8'));
 await db.exec(`
   INSERT INTO auth.users(id) VALUES ('${user}'), ('${peer}'), ('${outsider}'), ('${admin}'), ('${bettor}'), ('${acceptor}'), ('${minor}');
   INSERT INTO public.categories(id, name) VALUES ('${category}', 'General');
@@ -89,7 +90,7 @@ await db.exec(`
 
 test('all application tables have RLS enabled', async () => {
   const result = await db.query("SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND rowsecurity");
-  assert.equal(count(result), 28);
+  assert.equal(count(result), 30);
 });
 
 test('Kotlin row wire names match every SQL column', async () => {
@@ -102,7 +103,8 @@ test('Kotlin row wire names match every SQL column', async () => {
     Bet: 'bets', BetEvent: 'bet_events', BettingControls: 'betting_controls',
     ModerationAction: 'moderation_actions', GroupMessage: 'group_messages', ModerationReview: 'moderation_reviews',
     ConversationKey: 'conversation_keys', DisputeTicket: 'dispute_tickets',
-    UserNotification: 'user_notifications'
+    UserNotification: 'user_notifications',
+    UserPushToken: 'user_push_tokens', UserNotificationSettings: 'user_notification_settings'
   };
   for (const [model, table] of Object.entries(mappings)) {
     const source = await readFile(new URL(`../../app/src/main/java/com/lamadriguera/app/data/remote/supabase/row/${model}Row.kt`, import.meta.url), 'utf8');
@@ -769,7 +771,8 @@ test('thread decryption notifies both participants; only the service can create 
   assert.equal(count(await as(outsider, 'SELECT count(*) FROM public.user_notifications')), 0);
 
   // Solo puedo marcar como leídas las mías y únicamente el campo read_at.
-  const read = await as(peer, `UPDATE public.user_notifications SET read_at = now() WHERE user_id = '${peer}' RETURNING id`);
+  const read = await as(peer, `UPDATE public.user_notifications SET read_at = now()
+    WHERE user_id = '${peer}' AND type = 'thread_decrypted' RETURNING id`);
   assert.equal(read.rows.length, 1);
   await assert.rejects(as(peer, `UPDATE public.user_notifications SET body = 'x'`), /permission denied/);
 });
@@ -959,4 +962,56 @@ test('suspensions expire after 30 days through the trusted sweep', async () => {
   const revived = (await db.query(`SELECT status, suspended_until FROM public.users WHERE id = '${minor}'`)).rows[0];
   assert.equal(revived.status, 'active');
   assert.equal(revived.suspended_until, null);
+});
+
+test('push events: bids, messages and awarded auctions notify through user_notifications', async () => {
+  // The awarded auction test placed bids on a listing owned by `user`:
+  // every bid must have generated an 'oferta_recibida' for the owner.
+  assert.ok(count(await as(user, "SELECT count(*) FROM public.user_notifications WHERE type = 'oferta_recibida' AND body LIKE '%Laptop en subasta%'")) >= 1,
+    'el dueño recibe una notificación por cada puja');
+  // Private messages notify only the other participant (E2E: body never leaks content).
+  const notice = (await as(peer, "SELECT title, body FROM public.user_notifications WHERE type = 'mensaje_nuevo' ORDER BY created_at LIMIT 1")).rows[0];
+  assert.ok(notice, 'peer recibió aviso del mensaje de user');
+  assert.ok(!JSON.stringify(notice).includes('ciphertext'), 'el aviso no contiene el cuerpo del mensaje cifrado');
+  // Closing the auction awarded it to peer, who must have been notified.
+  const awarded = (await as(peer, "SELECT body FROM public.user_notifications WHERE type = 'subasta_ganada'")).rows;
+  assert.equal(awarded.length, 1);
+  assert.match(awarded[0].body, /130/);
+  // The owner is not notified about their own listing ending; moderation notices differ.
+  assert.equal(count(await as(user, "SELECT count(*) FROM public.user_notifications WHERE type = 'subasta_ganada'")), 0);
+});
+
+test('push devices and notification settings are owner-scoped under RLS', async () => {
+  // Default settings exist for every account (backfilled + created by trigger).
+  const settings = (await as(peer, 'SELECT push_enabled, telegram_enabled, telegram_chat_id FROM public.user_notification_settings')).rows;
+  assert.equal(settings.length, 1);
+  assert.equal(settings[0].push_enabled, true);
+  assert.equal(settings[0].telegram_enabled, false);
+  assert.equal(settings[0].telegram_chat_id, null);
+
+  // Telegram is opt-in: enabling it without a chat_id violates the check.
+  await assert.rejects(as(peer, 'UPDATE public.user_notification_settings SET telegram_enabled = true'),
+    /violates check constraint/);
+  await as(peer, `UPDATE public.user_notification_settings SET telegram_chat_id = '987654321', telegram_enabled = true
+    WHERE user_id = '${peer}' RETURNING user_id`);
+  // Nobody else can read or flip another user's settings (RLS filters, no error).
+  const ownSettings = await as(user, 'SELECT user_id FROM public.user_notification_settings');
+  assert.equal(ownSettings.rows.length, 1, 'user solo ve SU fila de ajustes');
+  assert.equal(ownSettings.rows[0].user_id, user);
+  assert.equal((await as(user, `UPDATE public.user_notification_settings SET push_enabled = false WHERE user_id = '${peer}' RETURNING user_id`)).rows.length, 0);
+  // Malformed ids are rejected even for the owner.
+  await assert.rejects(as(peer, `UPDATE public.user_notification_settings SET telegram_chat_id = 'no-es-un-id', telegram_enabled = true WHERE user_id = '${peer}'`),
+    /violates check constraint/);
+
+  // Push tokens: only the owner reads and writes their own row.
+  await as(peer, `INSERT INTO public.user_push_tokens(user_id, token) VALUES ('${peer}', 'fcm-token-peer')`);
+  assert.equal(count(await as(peer, 'SELECT count(*) FROM public.user_push_tokens')), 1);
+  assert.equal(count(await as(user, 'SELECT count(*) FROM public.user_push_tokens')), 0);
+  await assert.rejects(as(peer, `INSERT INTO public.user_push_tokens(user_id, token) VALUES ('${user}', 'fcm-token-spoof')`),
+    /row-level security|violates row-level security policy/);
+  // A physical token is unique across accounts: the device can only belong to one user.
+  await assert.rejects(as(user, `INSERT INTO public.user_push_tokens(user_id, token) VALUES ('${user}', 'fcm-token-peer')`),
+    /duplicate key/);
+  await as(peer, `DELETE FROM public.user_push_tokens WHERE token = 'fcm-token-peer'`);
+  assert.equal(count(await as(peer, 'SELECT count(*) FROM public.user_push_tokens')), 0);
 });

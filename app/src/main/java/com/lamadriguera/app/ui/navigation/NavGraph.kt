@@ -25,6 +25,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navDeepLink
 import com.lamadriguera.app.R
 import com.lamadriguera.app.core.result.UiState
 import com.lamadriguera.app.domain.model.SaleMode
@@ -54,6 +55,8 @@ import com.lamadriguera.app.feature.listings.ListingDetailScreen
 import com.lamadriguera.app.feature.listings.ListingDetailViewModel
 import com.lamadriguera.app.feature.listings.ListingsScreen
 import com.lamadriguera.app.feature.listings.ListingsViewModel
+import com.lamadriguera.app.feature.notifications.NotificationsScreen
+import com.lamadriguera.app.feature.notifications.NotificationsViewModel
 import com.lamadriguera.app.feature.profile.PrivacySettingsScreen
 import com.lamadriguera.app.feature.profile.PrivacySettingsViewModel
 import com.lamadriguera.app.feature.profile.ProfileScreen
@@ -83,8 +86,15 @@ import com.lamadriguera.app.ui.components.LoadingState
 @Composable
 fun LaMadrigueraNavGraph(
     navController: NavHostController = rememberNavController(),
-    startDestination: Destinations = Destinations.Splash
+    startDestination: Destinations = Destinations.Splash,
+    initialDeepLink: String? = null
 ) {
+    // Tocar una notificación (push o in-app) abre la bandeja.
+    LaunchedEffect(initialDeepLink) {
+        if (initialDeepLink == "lamadriguera://notifications") {
+            navController.navigate(Destinations.Notifications)
+        }
+    }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
 
@@ -583,6 +593,7 @@ fun LaMadrigueraNavGraph(
                             navController.navigate(Destinations.IdentityVerification)
                         },
                         onOpenPayments = { navController.navigate(Destinations.Payments()) },
+                        onOpenNotifications = { navController.navigate(Destinations.Notifications) },
                         onLogout = viewModel::logout
                     )
                     is UiState.Error -> ErrorState(
@@ -633,6 +644,27 @@ fun LaMadrigueraNavGraph(
                     onRevealPolicyChanged = viewModel::onRevealPolicyChanged,
                     onAliasChanged = viewModel::onAliasChanged,
                     onSave = viewModel::save
+                )
+            }
+
+            // Notificaciones: push FCM, ajustes y bandeja in-app (fallback fuera de Play)
+            composable<Destinations.Notifications>(
+                deepLinks = listOf(navDeepLink { uriPattern = "lamadriguera://notifications" })
+            ) {
+                val viewModel: NotificationsViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                NotificationsScreen(
+                    state = state,
+                    onMasterToggled = viewModel::updateMasterSwitch,
+                    onOffersToggled = viewModel::updateOffersSwitch,
+                    onMessagesToggled = viewModel::updateMessagesSwitch,
+                    onPaymentsToggled = viewModel::updatePaymentsSwitch,
+                    onAuctionsToggled = viewModel::updateAuctionsSwitch,
+                    onTelegramToggled = viewModel::updateTelegramSwitch,
+                    onTelegramChatIdChanged = viewModel::onTelegramChatIdChanged,
+                    onSave = viewModel::save,
+                    onMarkAllRead = viewModel::markAllRead,
+                    onPermissionResult = viewModel::onPermissionResult
                 )
             }
 
@@ -770,6 +802,7 @@ private fun NavDestination.topBarTitleRes(): Int = when {
     hasRoute<Destinations.Settings>() -> R.string.profile_settings
     hasRoute<Destinations.IdentityVerification>() -> R.string.identity_title
     hasRoute<Destinations.PrivacySettings>() -> R.string.privacy_title
+    hasRoute<Destinations.Notifications>() -> R.string.notif_title
     hasRoute<Destinations.Payments>() -> R.string.payments_title
     hasRoute<Destinations.AdminPaymentQueue>() -> R.string.payments_admin_queue
     hasRoute<Destinations.Deposit>() -> R.string.payments_deposit

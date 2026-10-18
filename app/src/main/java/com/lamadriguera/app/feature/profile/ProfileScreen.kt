@@ -52,6 +52,7 @@ fun ProfileScreen(
     onOpenPrivacySettings: () -> Unit,
     onOpenIdentityVerification: () -> Unit,
     onOpenPayments: () -> Unit,
+    onOpenNotifications: () -> Unit,
     onLogout: () -> Unit
 ) {
     val profile = session.profile
@@ -154,6 +155,13 @@ fun ProfileScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(stringResource(R.string.profile_privacy_settings))
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = onOpenNotifications,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(stringResource(R.string.profile_notifications))
         }
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedButton(

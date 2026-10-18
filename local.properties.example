@@ -30,3 +30,21 @@ SUPABASE_ANON_KEY=tu-anon-key-publica
 # clasificar imágenes ANTES de subirlas. Si se omite, se usa la heurística
 # offline de respaldo (ante la duda, la imagen no se sube).
 # NSFWJS_MODEL_URL=https://cdn.jsdelivr.net/npm/nsfwjs@2.4.2/dist/nsfwjs.min.js
+
+# ---------------------------------------------------------------------------
+# Push con Firebase Cloud Messaging (Fase 8, opcional).
+# Firebase console → Configuración del proyecto:
+#   FCM_PROJECT_ID  → "ID del proyecto" (p. ej. lamadriguera-push)
+#   GOOGLE_API_KEY  → clave de API de la app Android (la de "Predefinida de
+#                     Android API key" sirve para FCM).
+# Si se omiten, la build NO inicializa Firebase: no hay push y la app usa el
+# fallback in-app (user_notifications + Realtime) y el bot opcional de Telegram.
+# No hace falta google-services.json: la app se autoconfigura desde BuildConfig.
+# ---------------------------------------------------------------------------
+# FCM_PROJECT_ID=tu-proyecto-firestore
+# GOOGLE_API_KEY=AIza...
+
+# Telegram (solo para el ANUNCIO del canal de releases desde scripts/telegram-announce.sh;
+# el bot de avisos individuales vive en los secretos del backend Supabase).
+# TELEGRAM_BOT_TOKEN=123456:ABC...
+# TELEGRAM_CHAT_ID=-1001234567890

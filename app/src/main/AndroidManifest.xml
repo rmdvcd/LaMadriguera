@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Chat: compartir ubicación como mensaje (se cifra dentro del payload). -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Avisos del sistema (Android 13+ es un permiso en runtime; se pide en
+         Ajustes → Notificaciones). Sin él, el fallback in-app sigue funcionando. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".LaMadrigueraApp"
@@ -22,13 +25,56 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.LaMadriguera.Splash"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Deep link privado: tocar una notificación abre la bandeja
+                 (lamadriguera://notifications). No es navegable desde el navegador. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data
+                    android:host="notifications"
+                    android:scheme="lamadriguera" />
+            </intent-filter>
         </activity>
+
+        <!-- Push (FCM). Solo recibe llamadas del sistema de Google Play Services;
+             en ROMs sin GMS este servicio nunca se invoca y no cuesta nada. -->
+        <service
+            android:name=".feature.notifications.LaMadrigueraMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Defaults del aviso de sistema cuando el mensaje llega con
+             `notification` en vez de `data` (app en segundo plano). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="madriguera_general" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_madriguera" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/brand_primary" />
+
+        <!--
+          Sin google-services.json ni plugin: PushSupport inicializa Firebase a
+          mano desde BuildConfig. El InitProvider del SDK se quita del merge para
+          no crashear en builds sin configurar.
+        -->
+        <provider
+            android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:authorities="${applicationId}.firebaseinitprovider"
+            android:exported="false"
+            tools:node="remove" />
 
         <!--
           WorkManager se inicializa manualmente en LaMadrigueraApp con HiltWorkerFactory.

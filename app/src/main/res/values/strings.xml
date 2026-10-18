@@ -343,6 +343,38 @@
     <string name="group_wall_posted">Mensaje publicado</string>
     <string name="group_wall_hidden">Oculto por moderación</string>
     <string name="group_wall_empty">Aún no hay mensajes. Publica el primero.</string>
+    <!-- Notificaciones (Fase 8: push FCM + fallback in-app + Telegram opcional) -->
+    <string name="notif_title">Notificaciones</string>
+    <string name="notif_channel_general">La Madriguera</string>
+    <string name="notif_channel_offers">Ofertas recibidas</string>
+    <string name="notif_channel_messages">Mensajes</string>
+    <string name="notif_channel_payments">Pagos</string>
+    <string name="notif_channel_auctions">Subastas</string>
+    <string name="notif_channel_description">Avisos de ofertas, mensajes, pagos y subastas</string>
+    <string name="notif_push_title">Push del sistema (FCM)</string>
+    <string name="notif_push_unavailable">Esta build no tiene push activado (sin Firebase o sin Google Play Services en el dispositivo). Tus avisos llegan igual: en la app, en tiempo real.</string>
+    <string name="notif_push_no_permission">El push está disponible, pero Android no permite mostrar notificaciones. Concede el permiso para recibir avisos fuera de la app.</string>
+    <string name="notif_push_active">Push activo: te avisaremos aunque cierres la app.</string>
+    <string name="notif_push_ask_permission">Conceder permiso</string>
+    <string name="notif_switches_title">¿De qué te avisamos?</string>
+    <string name="notif_switch_master">Recibir notificaciones</string>
+    <string name="notif_switch_master_desc">Interruptor maestro: si lo apagas, solo verás los avisos dentro de la app</string>
+    <string name="notif_switch_offers">Ofertas recibidas</string>
+    <string name="notif_switch_messages">Mensajes nuevos</string>
+    <string name="notif_switch_payments">Pagos confirmados</string>
+    <string name="notif_switch_auctions">Subastas ganadas</string>
+    <string name="notif_telegram_title">Bot de Telegram (opcional)</string>
+    <string name="notif_telegram_desc">Si tu dispositivo no puede recibir push, los avisos pueden llegarte también por Telegram. Nada se envía aquí sin tu chat_id: es 100 % voluntario y puedes borrarlo cuando quieras.</string>
+    <string name="notif_telegram_enable">Recibir avisos por Telegram</string>
+    <string name="notif_telegram_chat_id">Tu chat_id</string>
+    <string name="notif_telegram_chat_id_hint">Solo dígitos (positivos o negativos). Pídele tu id al bot de La Madriguera</string>
+    <string name="notif_save">Guardar ajustes</string>
+    <string name="notif_saving">Guardando…</string>
+    <string name="notif_saved">Ajustes guardados ✓</string>
+    <string name="notif_inbox_title">Notificaciones recientes</string>
+    <string name="notif_inbox_empty">No tienes notificaciones pendientes</string>
+    <string name="notif_mark_read">Marcar leídas</string>
+    <string name="profile_notifications">Notificaciones</string>
 
     <!-- Común -->
     <string name="common_loading">Cargando…</string>

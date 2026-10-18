@@ -65,4 +65,7 @@ abstract class RepositoryModule {
     @Binds @Singleton
     abstract fun bindModerationActions(impl: SupabaseModerationActionsRepository): ModerationActionsRepository
 
+    @Binds @Singleton
+    abstract fun bindNotifications(impl: SupabaseNotificationsRepository): NotificationsRepository
+
 }

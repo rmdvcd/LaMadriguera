@@ -51,6 +51,7 @@ sealed interface Destinations {
     @Serializable data object Settings : Destinations
     @Serializable data object IdentityVerification : Destinations
     @Serializable data object PrivacySettings : Destinations
+    @Serializable data object Notifications : Destinations
 
     // --- Pagos ---
     @Serializable data class Payments(

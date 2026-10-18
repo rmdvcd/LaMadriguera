@@ -1,0 +1,120 @@
+name: Release APK (fuera de Google Play)
+
+# Un tag `vX.Y.Z` produce: APK firmado + version.json + sha256sums.txt +
+# notificación al canal de Telegram. La clave de firma NUNCA está en el repo:
+# vive como secret en GitHub (release.keystore en base64).
+#
+# Secretos requeridos (Settings → Secrets and variables → Actions):
+#   RELEASE_KEYSTORE_B64   base64 -w0 release.keystore        (obligatorio)
+#   RELEASE_KEYSTORE_PASSWORD  storePassword
+#   RELEASE_KEYSTORE_ALIAS     keyAlias (defecto: lamadriguera)
+#   RELEASE_KEY_PASSWORD       keyPassword
+#   TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID  (opcional: anuncio en el canal)
+#
+# Opcionales (app funcional, no de compilación):
+#   SUPABASE_URL / SUPABASE_ANON_KEY → se inyectan en local.properties del runner.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'VERSION_NAME (vacío = usar gradle.properties)'
+        required: false
+        default: ''
+      version_code:
+        description: 'VERSION_CODE (vacío = usar gradle.properties)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Materializar keystore de release
+        env:
+          RELEASE_KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+        run: |
+          if [ -z "${RELEASE_KEYSTORE_B64}" ]; then
+            echo "::error::Falta el secret RELEASE_KEYSTORE_B64: sin clave de release no hay APK instalable."
+            exit 1
+          fi
+          echo "${RELEASE_KEYSTORE_B64}" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+          echo "KEYSTORE_PASSWORD=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "KEYSTORE_ALIAS=${{ secrets.RELEASE_KEYSTORE_ALIAS || 'lamadriguera' }}" >> "$GITHUB_ENV"
+          echo "KEYSTORE_KEY_PASSWORD=${{ secrets.RELEASE_KEY_PASSWORD }}" >> "$GITHUB_ENV"
+
+      - name: Credenciales de la app (BuildConfig)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          FCM_PROJECT_ID: ${{ secrets.FCM_PROJECT_ID }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          {
+            echo "sdk.dir=$ANDROID_HOME"
+            [ -n "$SUPABASE_URL" ]    && echo "SUPABASE_URL=$SUPABASE_URL"
+            [ -n "$SUPABASE_ANON_KEY" ] && echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
+            [ -n "$FCM_PROJECT_ID" ]  && echo "FCM_PROJECT_ID=$FCM_PROJECT_ID"
+            [ -n "$GOOGLE_API_KEY" ]  && echo "GOOGLE_API_KEY=$GOOGLE_API_KEY"
+          } > local.properties
+
+      - name: Versión desde el tag
+        if: github.event_name == 'push'
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "VERSION_NAME=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+
+      - name: Versión desde inputs
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          [ -n "${{ inputs.version_name }}" ] && echo "VERSION_NAME=${{ inputs.version_name }}" >> "$GITHUB_ENV"
+          [ -n "${{ inputs.version_code }}" ] && echo "VERSION_CODE=${{ inputs.version_code }}" >> "$GITHUB_ENV"
+
+      - name: Compilar, firmar y calcular SHA-256 (scripts/build-apk.sh)
+        run: ./scripts/build-apk.sh
+
+      - name: Crear el release en GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: La Madriguera ${{ github.ref_name }}
+          files: |
+            dist/LaMadriguera-*.apk
+            dist/version.json
+            dist/sha256sums.txt
+          generate_release_notes: true
+
+      - name: Anunciar en el canal de Telegram
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: ./scripts/telegram-announce.sh
+
+      # Solo si quieres la web fuera de GitHub Releases: publica docs/download/
+      # en la rama gh-pages (Settings → Pages → «Deploy from a branch» → gh-pages).
+      - name: Publicar la página de descarga en GitHub Pages
+        if: ${{ vars.PUBLISH_DOWNLOAD_PAGE == 'true' }}
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs/download
+          publish_branch: gh-pages
