@@ -38,8 +38,8 @@ enum class IdentityVerificationStatus {
 
 /**
  * Clase de cuenta en el dispositivo: 1 teléfono (dispositivo) = 1 cuenta
- * principal. Las cuentas adicionales requieren verificación de identidad para
- * subastas y apuestas (ver [UserCapabilities]).
+ * principal. Las apuestas requieren identidad aprobada en todas las cuentas;
+ * las cuentas adicionales también la requieren para subastas.
  */
 enum class AccountKind {
     PRIMARY,

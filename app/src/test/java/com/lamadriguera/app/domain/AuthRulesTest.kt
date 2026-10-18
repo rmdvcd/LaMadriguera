@@ -145,9 +145,10 @@ class UserCapabilitiesTest {
     }
 
     @Test
-    fun primaryAccountMayAuctionWithOnlyPhoneVerification() {
+    fun primaryAccountMayAuctionWithPhoneButBettingStillRequiresIdentity() {
         val caps = UserCapabilities.of(user(), AccountKind.PRIMARY)
         assertTrue(caps.canAuction)
+        assertFalse(caps.canBet)
     }
 
     @Test

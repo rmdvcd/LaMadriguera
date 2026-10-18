@@ -8,6 +8,10 @@ const user = '00000000-0000-0000-0000-000000000001';
 const peer = '00000000-0000-0000-0000-000000000002';
 const outsider = '00000000-0000-0000-0000-000000000003';
 const admin = '00000000-0000-0000-0000-000000000004';
+const bettor = '00000000-0000-0000-0000-000000000005';
+const acceptor = '00000000-0000-0000-0000-000000000006';
+const minor = '00000000-0000-0000-0000-000000000007';
+const bettingGroup = '30000000-0000-0000-0000-000000000002';
 const listing = '10000000-0000-0000-0000-000000000001';
 const paused = '10000000-0000-0000-0000-000000000002';
 const conversation = '20000000-0000-0000-0000-000000000001';
@@ -61,8 +65,9 @@ await db.exec(await readFile(new URL('../migrations/001_initial_schema.sql', imp
 await db.exec(await readFile(new URL('../migrations/002_auth_identity_privacy.sql', import.meta.url), 'utf8'));
 await db.exec(await readFile(new URL('../migrations/003_listings_auctions.sql', import.meta.url), 'utf8'));
 await db.exec(await readFile(new URL('../migrations/004_chat_encryption_disputes.sql', import.meta.url), 'utf8'));
+await db.exec(await readFile(new URL('../migrations/005_peer_betting.sql', import.meta.url), 'utf8'));
 await db.exec(`
-  INSERT INTO auth.users(id) VALUES ('${user}'), ('${peer}'), ('${outsider}'), ('${admin}');
+  INSERT INTO auth.users(id) VALUES ('${user}'), ('${peer}'), ('${outsider}'), ('${admin}'), ('${bettor}'), ('${acceptor}'), ('${minor}');
   INSERT INTO public.categories(id, name) VALUES ('${category}', 'General');
   INSERT INTO public.listings(id, owner_id, title, description, category_id, price, status) VALUES
     ('${listing}', '${user}', 'Oferta', 'Descripción', '${category}', 10, 'active'),
@@ -79,9 +84,9 @@ await db.exec(`
     VALUES ('${group}', '${user}', 'Apuesta', 10);
 `);
 
-test('all 20 application tables have RLS enabled', async () => {
+test('all application tables have RLS enabled', async () => {
   const result = await db.query("SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND rowsecurity");
-  assert.equal(count(result), 20);
+  assert.equal(count(result), 22);
 });
 
 test('Kotlin row wire names match every SQL column', async () => {
@@ -90,7 +95,8 @@ test('Kotlin row wire names match every SQL column', async () => {
     Category: 'categories', Listing: 'listings', Bid: 'bids', Conversation: 'conversations',
     Message: 'messages', Review: 'reviews', Report: 'reports', Payment: 'payments',
     Boost: 'boosts', BettingGroup: 'betting_groups', BettingGroupMember: 'betting_group_members',
-    Bet: 'bets', ModerationAction: 'moderation_actions',
+    Bet: 'bets', BetEvent: 'bet_events', BettingControls: 'betting_controls',
+    ModerationAction: 'moderation_actions',
     ConversationKey: 'conversation_keys', DisputeTicket: 'dispute_tickets',
     UserNotification: 'user_notifications'
   };
@@ -445,16 +451,136 @@ test('chat: participants only, moderators need an open dispute; no participant h
   assert.equal(count(await as(admin, 'SELECT count(*) FROM public.messages', 'authenticated', 'moderator')), 0);
 });
 
-test('bets: group membership required for reading/writing, even for admin; no self-enrolment', async () => {
+test('bets: membership, read-only table writes and server-mediated membership changes', async () => {
   assert.equal(count(await as(user, 'SELECT count(*) FROM public.bets')), 1);
   assert.equal(count(await as(peer, 'SELECT count(*) FROM public.bets')), 1);
   assert.equal(count(await as(outsider, 'SELECT count(*) FROM public.bets')), 0);
   assert.equal(count(await as(admin, 'SELECT count(*) FROM public.bets', 'authenticated', 'admin')), 0);
-  await assert.rejects(as(outsider, `INSERT INTO public.betting_group_members(group_id, user_id) VALUES ('${group}', '${outsider}')`), /row-level security/);
-  await assert.rejects(as(outsider, `INSERT INTO public.bets(group_id, creator_id, description, stake_amount) VALUES ('${group}', '${outsider}', 'x', 1)`), /row-level security/);
+  await assert.rejects(as(outsider, `INSERT INTO public.betting_group_members(group_id, user_id) VALUES ('${group}', '${outsider}')`), /permission denied/);
+  await assert.rejects(as(outsider, `SELECT * FROM public.join_public_betting_group('${group}')`), /disponible|private|public/i);
+  await assert.rejects(as(outsider, `INSERT INTO public.bets(group_id, creator_id, description, stake_amount) VALUES ('${group}', '${outsider}', 'Apuesta', 1)`), /permission denied/);
   await assert.rejects(as(peer, "UPDATE public.bets SET status = 'settled_acceptor'"), /permission denied/);
-  await as(user, `DELETE FROM public.betting_group_members WHERE group_id = '${group}' AND user_id = '${peer}'`);
+  await as(user, `SELECT public.remove_betting_group_member('${group}', '${peer}')`);
   assert.equal(count(await as(peer, 'SELECT count(*) FROM public.bets')), 0);
+});
+
+test('P2P betting: identity + adult carnet, limits, self-exclusion, evidence, dispute decision and audit history', async () => {
+  await db.exec(`
+    UPDATE public.users SET verification_level = 'identity', status = 'active'
+      WHERE id IN ('${bettor}', '${acceptor}', '${minor}');
+    INSERT INTO public.identity_verifications(user_id, doc_type, doc_ref, full_name, birthdate, status, verified_by, verified_at, retention_until)
+    VALUES
+      ('${bettor}', 'carnet', '\\x01', 'Apostador', '1990-01-01', 'approved', '${admin}', now(), now() + interval '2 years'),
+      ('${acceptor}', 'carnet', '\\x02', 'Aceptante', '1992-01-01', 'approved', '${admin}', now(), now() + interval '2 years'),
+      ('${minor}', 'carnet', '\\x03', 'Menor', current_date - interval '17 years', 'approved', '${admin}', now(), now() + interval '2 years');
+    UPDATE public.users SET phone = '+5350000099' WHERE id = '${acceptor}';
+    UPDATE auth.users SET phone = '+5350000006', phone_confirmed_at = now() WHERE id = '${acceptor}';
+    UPDATE public.users SET phone = '+5350000008' WHERE id = '${outsider}';
+    UPDATE auth.users SET phone = '+5350000008', phone_confirmed_at = NULL WHERE id = '${outsider}';
+    INSERT INTO public.betting_groups(id, owner_id, name, visibility)
+      VALUES ('${bettingGroup}', '${bettor}', 'Prueba P2P', 'private');
+    INSERT INTO public.betting_group_members(group_id, user_id)
+      VALUES ('${bettingGroup}', '${acceptor}'), ('${bettingGroup}', '${minor}'), ('${bettingGroup}', '${outsider}');
+    UPDATE public.users SET status = 'active', verification_level = 'phone' WHERE id = '${outsider}';
+    INSERT INTO public.identity_verifications(user_id, doc_type, doc_ref, full_name, birthdate, status, verified_by, verified_at, retention_until)
+      VALUES ('${outsider}', 'id', '\\x04', 'Solo identidad no carnet', '1990-01-01', 'approved', '${admin}', now(), now() + interval '2 years');
+  `);
+
+  const defaults = await as(bettor, `SELECT daily_limit_cup::text FROM public.betting_controls WHERE user_id = '${bettor}'`);
+  assert.equal(defaults.rows[0].daily_limit_cup, '1000');
+  const invited = await as(bettor,
+    `SELECT (public.invite_betting_group_member('${bettingGroup}', '+53 50000006')).user_id AS id`
+  );
+  assert.equal(invited.rows[0].id, acceptor);
+  await assert.rejects(
+    as(bettor, `SELECT public.invite_betting_group_member('${bettingGroup}', '+53 50000008')`),
+    /No se pudo invitar/i
+  );
+  const oddsDefault = await db.query(`SELECT column_default FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'bets' AND column_name = 'odds'`);
+  assert.equal(oddsDefault.rows[0].column_default, null);
+
+  await assert.rejects(
+    as(outsider, `SELECT public.create_bet('${bettingGroup}', 'Solo teléfono', 10)`),
+    /identidad|carnet/i
+  );
+  await db.exec(`UPDATE public.users SET verification_level = 'identity' WHERE id = '${outsider}'`);
+  await assert.rejects(
+    as(outsider, `SELECT public.create_bet('${bettingGroup}', 'No tiene carnet', 10)`),
+    /carnet/i
+  );
+
+  await assert.rejects(
+    as(minor, `SELECT public.create_bet('${bettingGroup}', 'Apuesta menor de edad', 10)`),
+    /18 años/
+  );
+  await assert.rejects(
+    as(outsider, `SELECT public.create_bet('${bettingGroup}', 'Usuario sin identidad', 10)`),
+    /miembro|identidad|apostar/i
+  );
+
+  await as(bettor, `SELECT public.update_betting_daily_limit(100)`);
+  await as(acceptor, `SELECT public.update_betting_daily_limit(100)`);
+  const createdId = (await as(bettor,
+    `SELECT (public.create_bet('${bettingGroup}', 'Resultado del partido', 60, NULL)).id AS id`
+  )).rows[0].id;
+  const created = await db.query(`SELECT status, odds, stake_currency FROM public.bets WHERE id = '${createdId}'`);
+  assert.equal(created.rows[0].status, 'open');
+  assert.equal(created.rows[0].odds, null);
+  assert.equal(created.rows[0].stake_currency, 'CUP');
+
+  await assert.rejects(
+    as(minor, `SELECT (public.accept_bet('${createdId}')).id`),
+    /18 años/
+  );
+  await as(acceptor, `SELECT (public.accept_bet('${createdId}')).id`);
+  await assert.rejects(
+    as(bettor, `SELECT public.create_bet('${bettingGroup}', 'Supera el límite', 41)`),
+    /límite diario/i
+  );
+  await assert.rejects(
+    as(bettor, `SELECT (public.submit_bet_result('${createdId}', 'creator', NULL, NULL)).id`),
+    /evidencia/i
+  );
+
+  const imageRef = `${bettor}/${bettingGroup}/${createdId}/proof.jpg`;
+  await as(bettor, `INSERT INTO storage.objects(bucket_id, name) VALUES ('bet-evidence', '${imageRef}')`);
+  await as(bettor, `SELECT (public.submit_bet_result('${createdId}', 'creator', NULL, '${imageRef}')).id`);
+  const disputed = (await as(acceptor,
+    `SELECT (public.submit_bet_result('${createdId}', 'acceptor', 'Mi evidencia de desacuerdo', NULL)).status AS status`
+  )).rows[0].status;
+  assert.equal(disputed, 'disputed');
+  await as(bettor, `SELECT (public.resolve_bet_dispute('${createdId}', 'acceptor', 'El grupo revisó la evidencia')).id`);
+  const finalBet = await db.query(`SELECT status, decision_by, decision_note FROM public.bets WHERE id = '${createdId}'`);
+  assert.equal(finalBet.rows[0].status, 'settled_acceptor');
+  assert.equal(finalBet.rows[0].decision_by, bettor);
+  assert.equal(finalBet.rows[0].decision_note, 'El grupo revisó la evidencia');
+  await assert.rejects(
+    as(acceptor, `SELECT (public.submit_bet_result('${createdId}', 'acceptor', 'Nueva declaración', NULL)).id`),
+    /decidido de forma definitiva/i
+  );
+  await assert.rejects(
+    as(acceptor, `SELECT public.open_bet_dispute('${createdId}', 'Nueva disputa', NULL)`),
+    /decidido de forma definitiva/i
+  );
+  assert.equal(count(await as(acceptor, `SELECT count(*) FROM public.bet_events WHERE bet_id = '${createdId}'`)), 5);
+  assert.equal(count(await as(acceptor, `SELECT count(*) FROM storage.objects WHERE bucket_id = 'bet-evidence' AND name = '${imageRef}'`)), 1);
+  await as(bettor, `DELETE FROM storage.objects WHERE bucket_id = 'bet-evidence' AND name = '${imageRef}'`);
+  assert.equal(count(await db.query(`SELECT count(*) FROM storage.objects WHERE bucket_id = 'bet-evidence' AND name = '${imageRef}'`)), 1);
+  await assert.rejects(as(acceptor, `UPDATE public.bet_events SET evidence_text = 'editada' WHERE bet_id = '${createdId}'`), /permission denied/);
+
+  const openId = (await as(bettor,
+    `SELECT (public.create_bet('${bettingGroup}', 'Segundo resultado', 40)).id AS id`
+  )).rows[0].id;
+  const exclusion = (await as(acceptor, `SELECT (public.self_exclude_betting()).self_excluded_until AS until`)).rows[0].until;
+  assert.ok(new Date(exclusion).getTime() > Date.now() + 29 * 24 * 60 * 60 * 1000);
+  assert.ok(new Date(exclusion).getTime() < Date.now() + 31 * 24 * 60 * 60 * 1000);
+  await assert.rejects(as(acceptor, `SELECT (public.accept_bet('${openId}')).id`), /autoexclusión/i);
+  await assert.rejects(as(acceptor, 'SELECT public.self_exclude_betting()'), /ya está activa/i);
+
+  // The group owner can remove a member, but bet participants retain their own full history.
+  await as(bettor, `SELECT public.remove_betting_group_member('${bettingGroup}', '${acceptor}')`);
+  assert.equal(count(await as(acceptor, `SELECT count(*) FROM public.bets WHERE id = '${createdId}'`)), 1);
+  await assert.rejects(as(bettor, `SELECT public.remove_betting_group_member('${bettingGroup}', '${bettor}')`), /no puede expulsarse/i);
 });
 
 test('payment/reputation/moderation server-owned fields cannot be forged', async () => {

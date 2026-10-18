@@ -8,6 +8,7 @@ import com.lamadriguera.app.domain.repository.BetsRepository
 import io.github.jan.supabase.SupabaseClient
 import javax.inject.Inject
 
+/** Read-only table access. All writes go through atomic BettingRepository RPCs. */
 class SupabaseBetsRepository @Inject constructor(client: SupabaseClient) :
     SupabaseTableRepository<Bet, BetRow>(
         client = client,
@@ -16,9 +17,6 @@ class SupabaseBetsRepository @Inject constructor(client: SupabaseClient) :
         serializer = BetRow.serializer(),
         toDomain = { it.toDomain() },
         toRow = { it.toRow() },
-        insertColumns = setOf(
-            "id", "group_id", "creator_id", "description", "stake_amount", "stake_currency", "odds",
-            "evidence_url"
-        ),
+        insertColumns = emptySet(),
         updateColumns = emptySet()
     ), BetsRepository

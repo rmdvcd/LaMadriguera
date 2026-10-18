@@ -14,6 +14,9 @@ interface IdentityVerificationsRepository : InsertRepository<IdentityVerificatio
     /** Última solicitud del usuario (la más reciente), o null si no hay. */
     suspend fun latestForUser(userId: String): Result<IdentityVerification?>
 
+    /** Último carnet aprobado; se usa para validar la mayoría de edad de apuestas. */
+    suspend fun latestApprovedCarnetForUser(userId: String): Result<IdentityVerification?>
+
     /**
      * Sube frente y reverso del carnet al bucket privado y crea la fila en
      * estado pending. El usuario se toma de la sesión actual.

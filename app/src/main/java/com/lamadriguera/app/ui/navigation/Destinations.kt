@@ -39,8 +39,9 @@ sealed interface Destinations {
 
     // --- Apuestas ---
     @Serializable data object BettingHub : Destinations
+    @Serializable data class BettingGroup(val groupId: String) : Destinations
     @Serializable data class BetDetail(val betId: String) : Destinations
-    @Serializable data object CreateBet : Destinations
+    @Serializable data class CreateBet(val groupId: String) : Destinations
     @Serializable data object MyBets : Destinations
 
     // --- Perfil ---

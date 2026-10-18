@@ -2,5 +2,5 @@ package com.lamadriguera.app.domain.repository
 
 import com.lamadriguera.app.domain.model.Bet
 
-/** Access is additionally enforced by PostgreSQL grants and RLS. */
-interface BetsRepository : InsertRepository<Bet>
+/** Bets are read-only through this table API; changes must use BettingRepository RPCs. */
+interface BetsRepository : ReadRepository<Bet>

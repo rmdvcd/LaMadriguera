@@ -42,6 +42,12 @@ import com.lamadriguera.app.feature.chat.ChatScreen
 import com.lamadriguera.app.feature.chat.ChatViewModel
 import com.lamadriguera.app.feature.chat.ConversationListScreen
 import com.lamadriguera.app.feature.chat.ConversationListViewModel
+import com.lamadriguera.app.feature.betting.BetDetailScreen
+import com.lamadriguera.app.feature.betting.BetDetailViewModel
+import com.lamadriguera.app.feature.betting.BettingGroupScreen
+import com.lamadriguera.app.feature.betting.BettingGroupViewModel
+import com.lamadriguera.app.feature.betting.CreateBetScreen
+import com.lamadriguera.app.feature.betting.CreateBetViewModel
 import com.lamadriguera.app.feature.listings.CreateListingScreen
 import com.lamadriguera.app.feature.listings.CreateListingViewModel
 import com.lamadriguera.app.feature.listings.ListingDetailScreen
@@ -441,18 +447,103 @@ fun LaMadrigueraNavGraph(
                 )
             }
 
-            // Apuestas
+            // Apuestas P2P (el dinero nunca pasa por la aplicación)
             composable<Destinations.BettingHub> {
-                PlaceholderScreen(R.string.nav_betting)
+                val viewModel: BettingGroupViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                BettingGroupScreen(
+                    state = state,
+                    onRefresh = viewModel::refresh,
+                    onCreateGroup = viewModel::createGroup,
+                    onOpenGroup = { id -> navController.navigate(Destinations.BettingGroup(id)) },
+                    onJoinGroup = viewModel::joinGroup,
+                    onCreateBet = { id -> navController.navigate(Destinations.CreateBet(id)) },
+                    onOpenBet = { id -> navController.navigate(Destinations.BetDetail(id)) },
+                    onVerifyIdentity = { navController.navigate(Destinations.IdentityVerification) },
+                    onInviteMember = viewModel::inviteMember,
+                    onRemoveMember = viewModel::removeMember,
+                    onDailyLimitChanged = viewModel::onDailyLimitInputChanged,
+                    onSaveDailyLimit = viewModel::saveDailyLimit,
+                    onSelfExclude = viewModel::selfExclude
+                )
+                LaunchedEffect(state.createdGroupId) {
+                    state.createdGroupId?.let { id ->
+                        viewModel.clearCreatedGroupId()
+                        navController.navigate(Destinations.BettingGroup(id))
+                    }
+                }
+            }
+            composable<Destinations.BettingGroup> {
+                val viewModel: BettingGroupViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                BettingGroupScreen(
+                    state = state,
+                    onRefresh = viewModel::refresh,
+                    onCreateGroup = viewModel::createGroup,
+                    onOpenGroup = { id -> navController.navigate(Destinations.BettingGroup(id)) },
+                    onJoinGroup = viewModel::joinGroup,
+                    onCreateBet = { id -> navController.navigate(Destinations.CreateBet(id)) },
+                    onOpenBet = { id -> navController.navigate(Destinations.BetDetail(id)) },
+                    onVerifyIdentity = { navController.navigate(Destinations.IdentityVerification) },
+                    onInviteMember = viewModel::inviteMember,
+                    onRemoveMember = viewModel::removeMember,
+                    onDailyLimitChanged = viewModel::onDailyLimitInputChanged,
+                    onSaveDailyLimit = viewModel::saveDailyLimit,
+                    onSelfExclude = viewModel::selfExclude
+                )
             }
             composable<Destinations.BetDetail> {
-                PlaceholderScreen(R.string.screen_bet_detail)
+                val viewModel: BetDetailViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                BetDetailScreen(
+                    state = state,
+                    onRefresh = viewModel::refresh,
+                    onAccept = viewModel::accept,
+                    onSubmitResult = viewModel::submitResult,
+                    onOpenDispute = viewModel::openDispute,
+                    onResolveDispute = viewModel::resolveDispute,
+                    onVerifyIdentity = { navController.navigate(Destinations.IdentityVerification) }
+                )
             }
             composable<Destinations.CreateBet> {
-                PlaceholderScreen(R.string.screen_create_bet)
+                val viewModel: CreateBetViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                CreateBetScreen(
+                    state = state,
+                    onDescriptionChanged = viewModel::onDescriptionChanged,
+                    onStakeChanged = viewModel::onStakeChanged,
+                    onOddsChanged = viewModel::onOddsChanged,
+                    onSubmit = viewModel::submit,
+                    onVerifyIdentity = { navController.navigate(Destinations.IdentityVerification) },
+                    onBackToGroup = { navController.popBackStack() }
+                )
+                LaunchedEffect(state.createdBetId) {
+                    state.createdBetId?.let { id ->
+                        navController.navigate(Destinations.BetDetail(id)) {
+                            popUpTo<Destinations.CreateBet> { inclusive = true }
+                        }
+                    }
+                }
             }
             composable<Destinations.MyBets> {
-                PlaceholderScreen(R.string.betting_my_bets)
+                val viewModel: BettingGroupViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                BettingGroupScreen(
+                    state = state,
+                    initialTab = 1,
+                    onRefresh = viewModel::refresh,
+                    onCreateGroup = viewModel::createGroup,
+                    onOpenGroup = { id -> navController.navigate(Destinations.BettingGroup(id)) },
+                    onJoinGroup = viewModel::joinGroup,
+                    onCreateBet = { id -> navController.navigate(Destinations.CreateBet(id)) },
+                    onOpenBet = { id -> navController.navigate(Destinations.BetDetail(id)) },
+                    onVerifyIdentity = { navController.navigate(Destinations.IdentityVerification) },
+                    onInviteMember = viewModel::inviteMember,
+                    onRemoveMember = viewModel::removeMember,
+                    onDailyLimitChanged = viewModel::onDailyLimitInputChanged,
+                    onSaveDailyLimit = viewModel::saveDailyLimit,
+                    onSelfExclude = viewModel::selfExclude
+                )
             }
 
             // Perfil
@@ -581,6 +672,7 @@ private fun NavDestination.topBarTitleRes(): Int = when {
     hasRoute<Destinations.Conversations>() -> R.string.nav_chat
     hasRoute<Destinations.ChatThread>() -> R.string.screen_chat_thread
     hasRoute<Destinations.BettingHub>() -> R.string.nav_betting
+    hasRoute<Destinations.BettingGroup>() -> R.string.betting_group_screen
     hasRoute<Destinations.BetDetail>() -> R.string.screen_bet_detail
     hasRoute<Destinations.CreateBet>() -> R.string.screen_create_bet
     hasRoute<Destinations.MyBets>() -> R.string.betting_my_bets

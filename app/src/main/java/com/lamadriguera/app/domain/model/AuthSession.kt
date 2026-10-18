@@ -4,11 +4,12 @@ package com.lamadriguera.app.domain.model
  * Sesión de autenticación: usuario, perfil y clase de cuenta del dispositivo.
  *
  * Reglas de capacidad:
- * - Sin verificar identidad (`status = temp`): puede navegar, pero no crear
- *   grupos ni apostar.
- * - 1 teléfono (dispositivo) = 1 cuenta principal ([AccountKind.PRIMARY]); se
- *   permiten cuentas adicionales ([AccountKind.SECONDARY]), pero con
- *   verificación de identidad obligatoria para subastas y apuestas.
+ * - Sin activar (`status = temp`): puede navegar, pero no crear grupos ni apostar.
+ * - Apostar requiere identidad aprobada en todas las cuentas y edad 18+ validada
+ *   en el carnet (además de las reglas de límite y autoexclusión).
+ * - 1 teléfono (dispositivo) = 1 cuenta principal ([AccountKind.PRIMARY]); las
+ *   cuentas adicionales ([AccountKind.SECONDARY]) también requieren identidad
+ *   para las capacidades que lo exigen.
  */
 data class AuthSession(
     val user: User,
@@ -46,10 +47,9 @@ data class UserCapabilities(
     val canCreateGroups: Boolean
         get() = status == UserStatus.ACTIVE
 
-    /** Apostar exige identidad verificada (y más aún en cuentas adicionales). */
+    /** Toda apuesta exige identidad aprobada; la edad del carnet se valida aparte. */
     val canBet: Boolean
-        get() = status == UserStatus.ACTIVE &&
-            (accountKind == AccountKind.PRIMARY || verificationLevel == VerificationLevel.IDENTITY)
+        get() = status == UserStatus.ACTIVE && verificationLevel == VerificationLevel.IDENTITY
 
     /**
      * Subastas (pujar/crear): la cuenta principal participa con solo verificar

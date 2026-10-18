@@ -9,6 +9,7 @@
     <string name="nav_auction">Subastas</string>
     <string name="nav_chat">Mensajes</string>
     <string name="nav_betting">Apuestas</string>
+    <string name="betting_group_screen">Grupos de apuestas</string>
     <string name="nav_profile">Perfil</string>
     <string name="nav_payments">Pagos</string>
     <string name="nav_moderation">Moderación</string>
@@ -28,7 +29,7 @@
     <string name="auth_phone_subtitle">Te enviaremos un código por SMS para crear tu cuenta o iniciar sesión.</string>
     <string name="auth_phone_label">Teléfono</string>
     <string name="auth_phone_hint">+53 5xxxxxxx</string>
-    <string name="auth_phone_rule">1 teléfono = 1 cuenta principal. Las cuentas adicionales requieren verificación de identidad para subastas y apuestas.</string>
+    <string name="auth_phone_rule">1 teléfono = 1 cuenta principal. Para apostar, todas las cuentas necesitan identidad aprobada y tener 18 años o más según el carnet.</string>
     <string name="auth_send_code">Enviar código</string>
     <string name="auth_otp_label">Código SMS</string>
     <string name="auth_otp_hint">6 dígitos</string>
@@ -52,7 +53,7 @@
     <string name="identity_status_pending">Solicitud en revisión</string>
     <string name="identity_status_pending_desc">Tu identidad está siendo revisada. Te avisaremos cuando sea aprobada. Hasta entonces, tu cuenta es temporal.</string>
     <string name="identity_status_approved">Identidad aprobada</string>
-    <string name="identity_status_approved_desc">Tu cuenta está verificada. Ya puedes crear grupos, apostar y participar en subastas.</string>
+    <string name="identity_status_approved_desc">Tu identidad está verificada. Para apostar, además debes tener 18 años o más según el carnet y cumplir los controles del módulo.</string>
     <string name="identity_status_rejected">Solicitud rechazada</string>
     <string name="identity_status_rejected_desc">Revisa tus datos y vuelve a enviar la solicitud.</string>
     <string name="identity_resubmit">Volver a enviar</string>

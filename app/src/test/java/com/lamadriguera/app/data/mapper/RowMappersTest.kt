@@ -269,12 +269,62 @@ class RowMappersTest {
             status = BetStatus.OPEN,
             settledBy = "settledBy-value",
             settledAt = "2026-10-17T12:30:00Z",
-            evidenceUrl = "evidenceUrl-value",
+            evidenceRef = "evidenceRef-value",
+            evidenceText = "evidenceText-value",
+            acceptedAt = "2026-10-17T12:30:00Z",
+            decisionBy = "decisionBy-value",
+            decisionNote = "decisionNote-value",
             createdAt = "2026-10-17T12:30:00Z"
         )
         val domain = row.toDomain()
         assertEquals(row, domain.toRow())
         val json = SupabaseJson.encodeToString(BetRow.serializer(), row)
+        assertEquals(row, SupabaseJson.decodeFromString(BetRow.serializer(), json))
+    }
+
+    @Test fun betEventRowRoundTrip() {
+        val row = BetEventRow(
+            id = "event-id",
+            betId = "bet-id",
+            actorId = "actor-id",
+            eventType = "disputed",
+            outcome = "acceptor",
+            evidenceText = "No estoy de acuerdo",
+            evidenceRef = "user/group/bet/proof.jpg",
+            decisionNote = null,
+            createdAt = "2026-10-17T12:30:00Z"
+        )
+        val domain = row.toDomain()
+        assertEquals(row, domain.toRow())
+        val json = SupabaseJson.encodeToString(BetEventRow.serializer(), row)
+        assertEquals(row, SupabaseJson.decodeFromString(BetEventRow.serializer(), json))
+    }
+
+    @Test fun bettingControlsRowRoundTrip() {
+        val row = BettingControlsRow(
+            userId = "user-id",
+            dailyLimitCup = BigDecimal("1000.25"),
+            selfExcludedUntil = "2026-11-16T12:30:00Z",
+            updatedAt = "2026-10-17T12:30:00Z"
+        )
+        val domain = row.toDomain()
+        assertEquals(row, domain.toRow())
+        val json = SupabaseJson.encodeToString(BettingControlsRow.serializer(), row)
+        assertEquals(row, SupabaseJson.decodeFromString(BettingControlsRow.serializer(), json))
+    }
+
+    @Test fun betOddsCanBeNullAndEncodeAsSqlJsonNull() {
+        val row = BetRow(
+            id = "bet-id",
+            groupId = "group-id",
+            creatorId = "creator-id",
+            description = "Partido",
+            stakeAmount = BigDecimal("25.50"),
+            odds = null,
+            createdAt = "2026-10-17T12:30:00Z"
+        )
+        val json = SupabaseJson.encodeToString(BetRow.serializer(), row)
+        assertTrue(json.contains("\"odds\":null"))
         assertEquals(row, SupabaseJson.decodeFromString(BetRow.serializer(), json))
     }
 

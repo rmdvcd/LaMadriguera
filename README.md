@@ -181,7 +181,7 @@ UI (Compose) → ViewModel → UseCase → Repository (interfaz, domain) ← Imp
 | Inicio | `Home`, `Listings`, `ListingDetail`, `CreateListing`, `EditListing` |
 | Subastas | `Auctions`, `AuctionDetail`, `CreateAuction` |
 | Chat | `Conversations`, `ChatThread` |
-| Apuestas | `BettingHub`, `BetDetail`, `CreateBet`, `MyBets` |
+| Apuestas | `BettingHub`, `BettingGroup`, `CreateBet`, `BetDetail`, `MyBets` |
 | Perfil | `Profile`, `EditProfile`, `Settings`, `PrivacySettings` |
 | Pagos | `Payments`, `Deposit`, `Withdraw`, `TransactionHistory` |
 | Moderación | `Moderation`, `Reports`, `ReportDetail` |
@@ -261,7 +261,11 @@ Tipografía del sistema para mantener el APK ligero (redes móviles limitadas).
       SOLO con quórum 2-de-2 (admin general + moderador senior) por el proceso
       `supabase/functions/dispute-decrypt`, con log inmutable en `moderation_actions`,
       transcripción para moderación y aviso a ambas partes. Ver `supabase/README.md`.
-- [ ] **Fase 4 — Apuestas:** validación de saldo y reglas peer-to-peer.
+- [x] **Fase 4 — Apuestas P2P responsables:** grupos privados/públicos, owner administra
+      miembros, cuotas opcionales propuestas por el creador, historial y evidencias, disputa
+      resuelta por el owner, carnet aprobado + 18+, límite diario configurable y
+      autoexclusión de 30 días. La app registra resultados; el pago se acuerda y ejecuta
+      fuera de la app.
 - [ ] **Fase 5 — Pagos y moderación.**
 - [ ] **Fase 6 — Offline-first:** Room + WorkManager para sincronización con redes inestables.
 

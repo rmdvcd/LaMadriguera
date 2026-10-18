@@ -50,6 +50,19 @@ class SupabaseIdentityVerificationsRepository @Inject constructor(
         }.data).singleOrNull()?.toDomain()
     }
 
+    override suspend fun latestApprovedCarnetForUser(userId: String): Result<IdentityVerification?> = request {
+        require(userId.isNotBlank()) { "Empty user id" }
+        decodeRows(client.from(TABLE).select {
+            filter {
+                eq("user_id", userId)
+                eq("doc_type", IdentityVerificationRequest.DOC_TYPE_CARNET)
+                eq("status", APPROVED_VALUE)
+            }
+            order("verified_at", Order.DESCENDING)
+            limit(1)
+        }.data).singleOrNull()?.toDomain()
+    }
+
     override suspend fun submit(draft: IdentityVerificationRequest): Result<IdentityVerification> {
         val userId = client.auth.currentUserOrNull()?.id
             ?: return Result.Error(AppError.Unauthorized())
