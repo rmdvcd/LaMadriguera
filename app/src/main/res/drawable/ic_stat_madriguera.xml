@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icono de estado (bandeja) de La Madriguera: huella simple en blanco puro,
+     legible sobre la barra de notificaciones. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- almohadilla -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,13.4 C9.2,13.4 7,15.4 7,17.7 C7,19.3 8.4,20.3 10.3,20.3 C10.9,20.3 11.5,20.2 12,20.2 C12.5,20.2 13.1,20.3 13.7,20.3 C15.6,20.3 17,19.3 17,17.7 C17,15.4 14.8,13.4 12,13.4 Z" />
+    <!-- dedos -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M4.9,10.8 a 2,2.2 0 1,0 4,0 a 2,2.2 0 1,0 -4,0 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M8.5,7.4 a 1.8,2.2 0 1,0 3.6,0 a 1.8,2.2 0 1,0 -3.6,0 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,7.4 a 1.8,2.2 0 1,0 3.6,0 a 1.8,2.2 0 1,0 -3.6,0 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M15.2,10.8 a 2,2.2 0 1,0 4,0 a 2,2.2 0 1,0 -4,0 Z" />
+</vector>

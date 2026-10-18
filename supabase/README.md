@@ -104,6 +104,11 @@ psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/005_peer_betti
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/006_monetization_schema.sql
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/007_monetization_workflow.sql
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/008_moderation.sql
+# 009 necesita saber si debe enganchar el webhook de push (ver más abajo):
+psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
+  -c "set app.push_dispatch_url = 'https://<ref>.supabase.co/functions/v1/push-dispatch';" \
+  -c "set app.push_dispatch_secret = '<token-aleatorio>';" \
+  -f supabase/migrations/009_push_notifications.sql
 ```
 
 Desplegar las funciones Edge después de aplicar las migraciones:
@@ -111,6 +116,7 @@ Desplegar las funciones Edge después de aplicar las migraciones:
 ```sh
 supabase functions deploy submit-payment-proof
 supabase functions deploy moderate-text
+supabase functions deploy push-dispatch --no-verify-jwt
 ```
 
 No poner la contraseña de PostgreSQL ni la service-role key en Android/local.properties.
@@ -177,6 +183,49 @@ Las claves públicas de custodia se configuran con `DISPUTE_ADMIN_PUB` /
 `DISPUTE_MODERATOR_PUB` (local.properties o `-P`). Sin ellas se usa el par de desarrollo
 embebido en `DisputeKeyConfig`, cuyas privadas son públicas a propósito: nunca usarlas
 en producción.
+
+## Notificaciones push (Fase 8 · distribución fuera de Play)
+
+`009_push_notifications.sql` añade lo que necesita el push sin Google Play:
+
+- `user_push_tokens`: token FCM por dispositivo, UNIQUE, RLS estricta (cada
+  usuario ve/borra solo el suyo; `last_seen_at` actualizable). El cliente lo
+  registra al iniciar sesión, lo refresca cuando FCM rota el token y lo borra
+  al cerrar sesión.
+- `user_notification_settings`: interruptor maestro, cuatro conmutadores por
+  tipo (ofertas, mensajes, pagos, subastas) y `telegram_chat_id` opcional. El
+  CHECK `^-?[0-9]{1,20}$` garantiza que solo hay ids numéricos; la BD exige
+  chat_id para poder activar el bot de Telegram. Fila por defecto vía trigger
+  en cada `users` + backfill.
+- Triggers generadores de `user_notifications`: `oferta_recibida` (nueva puja
+  sobre publicación propia), `mensaje_nuevo` (aviso genérico al otro
+  participante; el contenido está cifrado de extremo a extremo y jamás viaja
+  al aviso) y `subasta_ganada` (al adjudicar `awarded`, avisa al mejor postor).
+  `payment_confirmed` ya lo generaba la fase 5.
+- `push-dispatch` (Edge Function): el webhook AFTER INSERT sobre
+  `user_notifications` le pasa la fila; envía FCM HTTP v1 (OAuth2 con JWT RS256
+  de la cuenta de servicio, token cacheado en el isolate) a cada dispositivo
+  del usuario respetando sus interruptores, purga los tokens que FCM marca como
+  inválidos y, SOLO si ningún push llegó, escribe por Telegram al usuario que
+  compartió su `chat_id`. Secretos:
+
+  | Secreto | Contenido |
+  |---|---|
+  | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | lectura de tokens/ajustes, purga de tokens |
+  | `PUSH_DISPATCH_SECRET` | valor esperado en el header `x-push-secret` (el mismo del webhook) |
+  | `FIREBASE_PROJECT_ID` | id del proyecto Firebase (destino `projects/<id>/messages:send`) |
+  | `FIREBASE_SERVICE_ACCOUNT_JSON` | JSON completo de la cuenta de servicio (no la pongas en Android) |
+  | `TELEGRAM_BOT_TOKEN` | opcional; sin él no hay fallback de Telegram |
+
+  El webhook se crea solo si al aplicar la migración estaban `app.push_dispatch_url`
+  (y opcionalmente `app.push_dispatch_secret`); si no, configúralo después desde
+  Database → Webhooks: `user_notifications` INSERT → `push-dispatch`, cabecera
+  `x-push-secret`. Sin webhook, la bandeja in-app (Realtime sobre
+  `user_notifications`, ya publicada en 004) sigue funcionando igual.
+
+Pruebas de estas piezas en `tests/schema.test.mjs`: conteo de tablas RLS,
+paridad columnas↔DTOs Kotlin (`UserPushTokenRow`, `UserNotificationSettingsRow`),
+generación de los avisos por puja/mensaje/adjudicación y RLS de tokens y ajustes.
 
 ## Kotlin
 

@@ -33,9 +33,13 @@ Thumbs.db
 google-services.json
 supabase.properties
 secrets.properties
+keystore.properties
 
 # Logs
 *.log
+
+# Artefactos de release (scripts/build-apk.sh); la web de descarga vive en docs/
+dist/
 
 # Node tooling (SQL regression tests)
 node_modules/

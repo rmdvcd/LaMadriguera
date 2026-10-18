@@ -21,6 +21,40 @@ fun secretOrPlaceholder(key: String, placeholder: String): String =
         ?: providers.gradleProperty(key).orNull
         ?: placeholder
 
+// --- Firma de release -------------------------------------------------------
+// Se busca `keystore.properties` en la raíz del repo (ver keystore.properties.example)
+// o las variables de entorno KEYSTORE_PATH / KEYSTORE_PASSWORD / KEYSTORE_ALIAS /
+// KEYSTORE_KEY_PASSWORD (CI). Si no hay nada, release se compila SIN firmar y
+// scripts/build-apk.sh lo indica; nunca se commitean claves.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) keystorePropertiesFile.inputStream().use { load(it) }
+}
+
+fun keystoreValue(key: String, envName: String): String? =
+    keystoreProperties.getProperty(key)?.takeIf { it.isNotBlank() }
+        ?: providers.environmentVariable(envName).orNull?.takeIf { it.isNotBlank() }
+
+val releaseKeystorePath = keystoreValue("storeFile", "KEYSTORE_PATH")
+val releaseKeystorePassword = keystoreValue("storePassword", "KEYSTORE_PASSWORD")
+val releaseKeystoreAlias = keystoreValue("keyAlias", "KEYSTORE_ALIAS")
+val releaseKeystoreKeyPassword = keystoreValue("keyPassword", "KEYSTORE_KEY_PASSWORD")
+val releaseSigningConfigured = listOf(
+    releaseKeystorePath, releaseKeystorePassword, releaseKeystoreAlias, releaseKeystoreKeyPassword
+).all { it != null } && releaseKeystorePath?.let { rootProject.file(it).exists() } == true
+
+// --- Versión ----------------------------------------------------------------
+// Fuente de verdad: gradle.properties (VERSION_CODE / VERSION_NAME),
+// sobrescribible con -PVERSION_CODE=... -PVERSION_NAME=...
+val appVersionCode = (
+    providers.gradleProperty("VERSION_CODE").orNull
+        ?: localProperties.getProperty("VERSION_CODE")
+        ?: "1"
+    ).toIntOrNull() ?: 1
+val appVersionName = providers.gradleProperty("VERSION_NAME").orNull
+    ?: localProperties.getProperty("VERSION_NAME")
+    ?: "1.0.0-dev"
+
 android {
     namespace = "com.lamadriguera.app"
     compileSdk = 35
@@ -29,8 +63,8 @@ android {
         applicationId = "com.lamadriguera.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0-dev"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -75,6 +109,32 @@ android {
             "NSFWJS_MODEL_URL",
             "\"${secretOrPlaceholder("NSFWJS_MODEL_URL", "")}\""
         )
+
+        // Firebase Cloud Messaging (push). La app inicializa Firebase SOLO si
+        // ambos valores existen (Firebase console → Configuración del proyecto:
+        // ID del proyecto y clave de API de Android), sin necesidad de
+        // google-services.json. Vacío ⇒ push desactivado y la app usa el
+        // fallback in-app (user_notifications + Realtime) y el bot de Telegram.
+        buildConfigField(
+            "String",
+            "FCM_PROJECT_ID",
+            "\"${secretOrPlaceholder("FCM_PROJECT_ID", "")}\""
+        )
+        buildConfigField(
+            "String",
+            "GOOGLE_API_KEY",
+            "\"${secretOrPlaceholder("GOOGLE_API_KEY", "")}\""
+        )
+    }
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = rootProject.file(releaseKeystorePath!!)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeystoreAlias
+                keyPassword = releaseKeystoreKeyPassword
+            }
+        }
     }
     buildTypes {
         debug {
@@ -82,12 +142,24 @@ android {
             isDebuggable = true
         }
         release {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // R8 + shrink: requisito de una distribución ligera para redes
+            // móviles cubanas; las keep-rules viven en proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                // Build sin secretos (CI sin configurar): advertir, no romper.
+                project.logger.warn(
+                    "⚠ release SIN FIRMAR: falta keystore.properties o " +
+                        "KEYSTORE_PATH/KEYSTORE_PASSWORD/KEYSTORE_ALIAS/KEYSTORE_KEY_PASSWORD. " +
+                        "Ejecuta scripts/build-apk.sh --gen-keystore para crear uno."
+                )
+            }
         }
     }
 
@@ -166,6 +238,12 @@ dependencies {
 
     // Almacenamiento seguro de tokens
     implementation(libs.security.crypto)
+
+    // Firebase Cloud Messaging (push). Inicialización manual en PushSupport:
+    // sin google-services.json ni plugin, Firebase queda inerte si no se configuran
+    // FCM_PROJECT_ID/GOOGLE_API_KEY y la app cae al fallback in-app/Telegram.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     // Serialization + coroutines
     implementation(libs.kotlinx.serialization.json)

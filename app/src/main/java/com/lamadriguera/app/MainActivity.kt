@@ -26,9 +26,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             LaMadrigueraTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    LaMadrigueraNavGraph()
+                    LaMadrigueraNavGraph(initialDeepLink = notificationDeepLink())
                 }
             }
         }
     }
+
+    /** `lamadriguera://notifications` cuando la app se abre desde un aviso. */
+    private fun notificationDeepLink(): String? =
+        intent?.takeIf { it.action == android.content.Intent.ACTION_VIEW }?.dataString
 }
