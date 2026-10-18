@@ -21,9 +21,10 @@ import javax.inject.Inject
  * - Frescura:   10% (0.10)
  * - Respuesta:   5% (0.05)
  *
- * Boost:
- * - Multiplica la puntuación base por ×1.3 si el boost está activo (`boostedUntil > now`),
- *   pero NO salta ni bonifica listings cuya reputación sea `< 3` (`reputationAvg < 3.0`).
+ * Promociones:
+ * - Un boost pagado activo multiplica por ×1.3 incluso antes de que el dueño tenga reseñas;
+ *   el boost legado/no pagado conserva el umbral de reputación de 3.0.
+ * - Un producto de alcance activo permite aparecer en su ámbito y aplica ×1.15 en ese feed geográfico.
  */
 class ListingRanker @Inject constructor() {
 
@@ -34,9 +35,9 @@ class ListingRanker @Inject constructor() {
         now: Instant = Instant.now()
     ): List<RankedListing> {
         val targetMunicipality = filter.municipalityId ?: referenceMunicipalityId
-        return candidates
+        val ranked = candidates
             .asSequence()
-            .filter { matchesFilter(it, filter) }
+            .filter { matchesFilter(it, filter, now) }
             .map { candidate -> scoreCandidate(candidate, filter.query, targetMunicipality, now) }
             .sortedWith(
                 compareByDescending<RankedListing> { it.finalScore }
@@ -44,18 +45,84 @@ class ListingRanker @Inject constructor() {
                     .thenByDescending { it.listing.createdAt }
             )
             .toList()
+        return placeFeaturedSlots(ranked, filter, now)
     }
 
-    fun matchesFilter(candidate: ListingCandidate, filter: ListingSearchFilter): Boolean {
+    fun matchesFilter(
+        candidate: ListingCandidate,
+        filter: ListingSearchFilter,
+        now: Instant = Instant.now()
+    ): Boolean {
         val listing = candidate.listing
         if (filter.kind != null && listing.kind != filter.kind) return false
         if (filter.saleMode != null && listing.saleMode != filter.saleMode) return false
         if (!filter.categoryId.isNullOrBlank() && listing.categoryId != filter.categoryId) return false
-        if (filter.municipalityId != null && listing.municipalityId != filter.municipalityId) return false
+        if (filter.municipalityId != null && !isVisibleInMunicipality(candidate, filter.municipalityId, now)) return false
         if (filter.query.isNotBlank() && computeRelevance(listing, filter.query, candidate.categoryName) <= 0.0) {
             return false
         }
         return true
+    }
+
+    /**
+     * Inserta las publicaciones de la categoría/municipio en un espacio de cada
+     * cinco (después de cuatro orgánicas). Si no hay cuatro espacios orgánicos
+     * disponibles no se fuerza una posición patrocinada fuera de la regla.
+     */
+    private fun placeFeaturedSlots(
+        ranked: List<RankedListing>,
+        filter: ListingSearchFilter,
+        now: Instant
+    ): List<RankedListing> {
+        if (filter.categoryId.isNullOrBlank() || filter.municipalityId == null) return ranked
+        val eligibleIds = ranked.asSequence()
+            .filter { it.isFeatured }
+            .filter { it.listing.categoryId == filter.categoryId }
+            .filter { it.listing.municipalityId == filter.municipalityId }
+            .filter { it.listing.boostedUntil?.isAfter(now) == true }
+            .map { it.listing.id }
+            .toSet()
+        if (eligibleIds.isEmpty()) return ranked
+
+        val organic = ranked.filterNot { it.listing.id in eligibleIds }
+        val featured = ranked.filter { it.listing.id in eligibleIds }
+        val result = ArrayList<RankedListing>(ranked.size)
+        var organicIndex = 0
+        var featuredIndex = 0
+        while (organicIndex + 4 <= organic.size && featuredIndex < featured.size) {
+            result.addAll(organic.subList(organicIndex, organicIndex + 4))
+            organicIndex += 4
+            result += featured[featuredIndex++]
+        }
+        result.addAll(organic.drop(organicIndex))
+        return result
+    }
+
+    private fun isVisibleInMunicipality(
+        candidate: ListingCandidate,
+        targetMunicipalityId: Int,
+        now: Instant
+    ): Boolean = candidate.listing.municipalityId == targetMunicipalityId ||
+        hasActiveReachPromotion(candidate, targetMunicipalityId, now)
+
+    private fun hasActiveReachPromotion(
+        candidate: ListingCandidate,
+        targetMunicipalityId: Int,
+        now: Instant
+    ): Boolean {
+        val origin = candidate.listing.municipalityId
+        return candidate.activePromotions.asSequence()
+            .filter { it.productType == com.lamadriguera.app.domain.model.ProductType.REACH }
+            .filter { it.startsAt <= now && it.endsAt > now }
+            .any { promotion ->
+                when (promotion.reachScope) {
+                    com.lamadriguera.app.domain.model.PromotionScope.MUNICIPALITY -> origin == targetMunicipalityId
+                    com.lamadriguera.app.domain.model.PromotionScope.PROVINCE ->
+                        origin != null && CubanMunicipalities.isSameProvince(origin, targetMunicipalityId)
+                    com.lamadriguera.app.domain.model.PromotionScope.NATIONAL -> true
+                    null -> false
+                }
+            }
     }
 
     fun scoreCandidate(
@@ -80,8 +147,22 @@ class ListingRanker @Inject constructor() {
         )
 
         val hasActiveBoost = listing.boostedUntil != null && listing.boostedUntil.isAfter(now)
-        val canApplyBoost = hasActiveBoost && candidate.ownerReputationAvg >= MIN_REPUTATION_FOR_BOOST
-        val finalScore = if (canApplyBoost) baseScore * BOOST_MULTIPLIER else baseScore
+        val hasPaidBoost = candidate.activePromotions.any {
+            it.productType == com.lamadriguera.app.domain.model.ProductType.BOOST &&
+                it.startsAt <= now && it.endsAt > now
+        }
+        // Un boost comprado se cumple aunque el anunciante aún no tenga reputación; la
+        // antigua bonificación no pagada conserva el umbral antispam existente.
+        val canApplyBoost = hasPaidBoost || (
+            hasActiveBoost && candidate.activePromotions.isEmpty() &&
+                candidate.ownerReputationAvg >= MIN_REPUTATION_FOR_BOOST
+        )
+        val hasActiveReach = targetMunicipalityId?.let {
+            hasActiveReachPromotion(candidate, it, now)
+        } == true
+        val boostMultiplier = if (canApplyBoost) BOOST_MULTIPLIER else 1.0
+        val reachMultiplier = if (hasActiveReach) REACH_MULTIPLIER else 1.0
+        val finalScore = baseScore * boostMultiplier * reachMultiplier
 
         return RankedListing(
             listing = listing,
@@ -96,7 +177,12 @@ class ListingRanker @Inject constructor() {
             responseScore = response,
             baseScore = baseScore,
             finalScore = finalScore,
-            isBoostApplied = canApplyBoost
+            isBoostApplied = canApplyBoost,
+            isPromoted = hasActiveBoost,
+            isFeatured = candidate.activePromotions.any {
+                it.productType == com.lamadriguera.app.domain.model.ProductType.FEATURE &&
+                    it.startsAt <= now && it.endsAt > now
+            }
         )
     }
 
@@ -218,6 +304,7 @@ class ListingRanker @Inject constructor() {
         const val WEIGHT_FRESHNESS = 0.10
         const val WEIGHT_RESPONSE = 0.05
         const val BOOST_MULTIPLIER = 1.3
+        const val REACH_MULTIPLIER = 1.15
         val MIN_REPUTATION_FOR_BOOST: BigDecimal = BigDecimal("3")
     }
 }

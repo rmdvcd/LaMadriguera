@@ -4,9 +4,9 @@ Aplicación Android de **marketplace y apuestas peer-to-peer para Cuba**.
 
 Este repositorio contiene el esqueleto Android (arquitectura, navegación, tema e inyección),
 la **capa de persistencia Supabase/Kotlin** (migraciones SQL con RLS, DTOs serializables,
-modelos, mappers y repositorios inyectados por Hilt) y el **módulo de autenticación y
-perfiles** (Fase 1): acceso con teléfono + OTP, verificación de identidad con carnet,
-perfil con reputación y configuración de privacidad.
+modelos, mappers y repositorios inyectados por Hilt), el **módulo de autenticación y
+perfiles** y el **flujo de monetización** (Fase 5): promociones, pagos manuales por
+Transfermóvil y conciliación privada por admin/cobrador.
 
 La configuración del esquema, permisos y pruebas de la capa de datos se documenta en
 [`supabase/README.md`](supabase/README.md).
@@ -123,7 +123,7 @@ com.lamadriguera.app
 │
 ├── data/
 │   ├── local/                 DataStore y base de datos local (fase 2)
-│   ├── remote/supabase/       Provider, JSON y 16 DTOs de tabla (@Serializable)
+│   ├── remote/supabase/       Provider, JSON y 25 DTOs de tabla/RPC (@Serializable)
 │   ├── mapper/                Row ↔ dominio, bytea, fechas y decimales exactos
 │   └── repository/            Repositorios PostgREST por tabla
 │
@@ -183,7 +183,7 @@ UI (Compose) → ViewModel → UseCase → Repository (interfaz, domain) ← Imp
 | Chat | `Conversations`, `ChatThread` |
 | Apuestas | `BettingHub`, `BettingGroup`, `CreateBet`, `BetDetail`, `MyBets` |
 | Perfil | `Profile`, `EditProfile`, `Settings`, `PrivacySettings` |
-| Pagos | `Payments`, `Deposit`, `Withdraw`, `TransactionHistory` |
+| Pagos | `Payments`, `AdminPaymentQueue`, `Deposit`, `Withdraw`, `TransactionHistory` |
 | Moderación | `Moderation`, `Reports`, `ReportDetail` |
 
 La barra inferior muestra: Publicaciones, Subastas, Chat, Apuestas y Perfil.
@@ -250,7 +250,7 @@ Tipografía del sistema para mantener el APK ligero (redes móviles limitadas).
       pública o solo proveedores), compresión de foto en cliente (`<= 1 MB`), listado con
       búsqueda por municipio + categoría + filtro offer/request, ranking ponderado
       (relevancia 45%, proximidad 25%, reputación 15%, frescura 10%, respuesta 5%; boost
-      ×1.3 sin saltar reputación < 3), modo subasta configurable (`AuctionConfigScreen`,
+      pagado ×1.3 aunque aún no haya reseñas; el legado conserva umbral antispam), modo subasta configurable (`AuctionConfigScreen`,
       `ListingDetailScreen`, `BidHistoryScreen`), seguridad de pujas y cierre de subastas
       (RPC `close_auction` / `close_due_auctions` + `AuctionClosureWorker`).
 - [x] **Fase 3 — Chat cifrado (diseño C):** conversaciones y mensajes en tiempo real
@@ -266,7 +266,11 @@ Tipografía del sistema para mantener el APK ligero (redes móviles limitadas).
       resuelta por el owner, carnet aprobado + 18+, límite diario configurable y
       autoexclusión de 30 días. La app registra resultados; el pago se acuerda y ejecuta
       fuera de la app.
-- [ ] **Fase 5 — Pagos y moderación.**
+- [x] **Fase 5 — Monetización y conciliación:** boosts 24 h/7 días, destacados en espacios
+      1 de cada 5, alcance geográfico, pagos Transfermóvil con comprobante privado y hash
+      antifraude, cola admin/cobrador con URL firmada, confirmación/rechazo y notificaciones.
+      Tarifas y cuenta parten sin configurar; las compras quedan bloqueadas hasta activarlas.
+      Ver despliegue y roles en `supabase/README.md`.
 - [ ] **Fase 6 — Offline-first:** Room + WorkManager para sincronización con redes inestables.
 
 ---

@@ -66,6 +66,8 @@ await db.exec(await readFile(new URL('../migrations/002_auth_identity_privacy.sq
 await db.exec(await readFile(new URL('../migrations/003_listings_auctions.sql', import.meta.url), 'utf8'));
 await db.exec(await readFile(new URL('../migrations/004_chat_encryption_disputes.sql', import.meta.url), 'utf8'));
 await db.exec(await readFile(new URL('../migrations/005_peer_betting.sql', import.meta.url), 'utf8'));
+await db.exec(await readFile(new URL('../migrations/006_monetization_schema.sql', import.meta.url), 'utf8'));
+await db.exec(await readFile(new URL('../migrations/007_monetization_workflow.sql', import.meta.url), 'utf8'));
 await db.exec(`
   INSERT INTO auth.users(id) VALUES ('${user}'), ('${peer}'), ('${outsider}'), ('${admin}'), ('${bettor}'), ('${acceptor}'), ('${minor}');
   INSERT INTO public.categories(id, name) VALUES ('${category}', 'General');
@@ -86,7 +88,7 @@ await db.exec(`
 
 test('all application tables have RLS enabled', async () => {
   const result = await db.query("SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND rowsecurity");
-  assert.equal(count(result), 22);
+  assert.equal(count(result), 26);
 });
 
 test('Kotlin row wire names match every SQL column', async () => {
@@ -94,6 +96,7 @@ test('Kotlin row wire names match every SQL column', async () => {
     User: 'users', IdentityVerification: 'identity_verifications', Profile: 'profiles',
     Category: 'categories', Listing: 'listings', Bid: 'bids', Conversation: 'conversations',
     Message: 'messages', Review: 'reviews', Report: 'reports', Payment: 'payments',
+    MonetizationProduct: 'monetization_products', MonetizationSettings: 'monetization_settings',
     Boost: 'boosts', BettingGroup: 'betting_groups', BettingGroupMember: 'betting_group_members',
     Bet: 'bets', BetEvent: 'bet_events', BettingControls: 'betting_controls',
     ModerationAction: 'moderation_actions',
@@ -584,9 +587,85 @@ test('P2P betting: identity + adult carnet, limits, self-exclusion, evidence, di
 });
 
 test('payment/reputation/moderation server-owned fields cannot be forged', async () => {
-  await assert.rejects(as(user, `INSERT INTO public.payments(user_id, product_type, target_id, amount, status) VALUES ('${user}', 'boost', '${listing}', 1, 'confirmed')`), /row-level security/);
+  await assert.rejects(as(user, `INSERT INTO public.payments(user_id, product_type, target_id, amount, status) VALUES ('${user}', 'boost', '${listing}', 1, 'confirmed')`), /permission denied/);
   await assert.rejects(as(user, 'UPDATE public.profiles SET reputation_avg = 5'), /permission denied/);
   await assert.rejects(as(user, `INSERT INTO public.moderation_actions(target_type, target_id, source, category, severity, action, reason) VALUES ('user', '${peer}', 'admin', 'x', 1, 'ban', 'x')`), /permission denied/);
+});
+
+test('monetization: order → server-hashed proof → review → confirm/reject, blacklist and notifications', async () => {
+  await db.exec(`UPDATE public.listings SET municipality_id = 101, status = 'active' WHERE id = '${listing}'`);
+  assert.equal(count(await as(user, 'SELECT count(*) FROM public.monetization_products')), 0);
+  await assert.rejects(
+    as(user, `SELECT * FROM public.create_monetization_payment('${listing}', 'boost_24h')`),
+    /producto de promoción ya no está disponible/
+  );
+  await as(peer, `SELECT * FROM public.update_monetization_product_price('boost_24h', 100, true)`, 'authenticated', 'cashier');
+  await assert.rejects(
+    as(user, `SELECT * FROM public.create_monetization_payment('${listing}', 'boost_24h')`),
+    /cuenta Transfermóvil.*no está configurada/
+  );
+  await as(peer, `SELECT * FROM public.update_monetization_settings('12345678', 'La Madriguera')`, 'authenticated', 'cashier');
+  assert.equal((await as(peer, 'SELECT public.is_payment_reviewer()', 'authenticated', 'cashier')).rows[0].is_payment_reviewer, true);
+  assert.equal(count(await as(peer, `SELECT count(*) FROM storage.objects WHERE bucket_id = 'payment-proofs'`, 'authenticated', 'cashier')), 0);
+  await assert.rejects(
+    as(outsider, 'SELECT * FROM public.payment_review_queue()', 'authenticated', 'user', { role: 'cashier' }),
+    /Solo un cobrador\/admin/
+  );
+
+  const order1 = (await as(user, `SELECT * FROM public.create_monetization_payment('${listing}', 'boost_24h')`)).rows[0];
+  assert.match(order1.code, /^LM-[0-9A-F]{4}$/);
+  assert.equal(order1.status, 'pending');
+  assert.equal(order1.amount, '100');
+  await db.exec(`UPDATE public.payments SET created_at = now() - interval '2 hours', expires_at = now() + interval '22 hours' WHERE id = '${order1.id}'`);
+  const proof1 = `${user}/${order1.id}/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.jpg`;
+  await db.exec(`INSERT INTO storage.objects(bucket_id, name, owner) VALUES ('payment-proofs', '${proof1}', '${user}')`);
+  const hash1 = 'a'.repeat(64);
+  const submitted = (await as(admin, `SELECT * FROM public.submit_monetization_proof(
+    '${user}', '${order1.id}', '${proof1}', '${hash1}', '4321', now() - interval '20 minutes'
+  )`, 'service_role', 'admin')).rows[0];
+  assert.equal(submitted.status, 'review');
+  assert.equal((await db.query(`SELECT status FROM public.listings WHERE id = '${listing}'`)).rows[0].status, 'paused_payment');
+  assert.equal((await as(peer, 'SELECT * FROM public.payment_review_queue()', 'authenticated', 'cashier')).rows.length, 1);
+  assert.equal(count(await as(peer, `SELECT count(*) FROM storage.objects WHERE bucket_id = 'payment-proofs'`, 'authenticated', 'cashier')), 1);
+  await assert.rejects(as(user, 'SELECT * FROM public.payment_review_queue()'), /Solo un cobrador\/admin/);
+  await assert.rejects(as(user, `SELECT * FROM public.submit_monetization_proof(
+    '${user}', '${order1.id}', '${proof1}', '${hash1}', '4321', now()
+  )`), /permission denied/);
+
+  await assert.rejects(as(peer, `SELECT * FROM public.confirm_monetization_payment(
+    '${order1.id}', 100, now(), '4321', 'TM-TIME-MISMATCH'
+  )`, 'authenticated', 'cashier'), /horario del extracto difiere más de 15 minutos/);
+  const confirmed = (await as(peer, `SELECT * FROM public.confirm_monetization_payment(
+    '${order1.id}', 100, now() - interval '20 minutes', '4321', 'TM-0001'
+  )`, 'authenticated', 'cashier')).rows[0];
+  assert.equal(confirmed.status, 'confirmed');
+  const activated = await db.query(`SELECT status, boosted_until FROM public.listings WHERE id = '${listing}'`);
+  assert.equal(activated.rows[0].status, 'active');
+  assert.ok(activated.rows[0].boosted_until);
+  assert.equal((await db.query(`SELECT product_type, tier FROM public.boosts WHERE payment_id = '${order1.id}'`)).rows[0].product_type, 'boost');
+
+  const order2 = (await as(user, `SELECT * FROM public.create_monetization_payment('${listing}', 'boost_24h')`)).rows[0];
+  const proof2 = `${user}/${order2.id}/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.png`;
+  await db.exec(`INSERT INTO storage.objects(bucket_id, name, owner) VALUES ('payment-proofs', '${proof2}', '${user}')`);
+  const hash2 = 'b'.repeat(64);
+  await as(admin, `SELECT * FROM public.submit_monetization_proof(
+    '${user}', '${order2.id}', '${proof2}', '${hash2}', '9876', now()
+  )`, 'service_role', 'admin');
+  const rejected = (await as(peer, `SELECT * FROM public.reject_monetization_payment(
+    '${order2.id}', 'El monto no coincide con el extracto', true
+  )`, 'authenticated', 'cashier')).rows[0];
+  assert.equal(rejected.status, 'rejected');
+  assert.equal(rejected.rejection_reason, 'El monto no coincide con el extracto');
+  assert.equal((await db.query(`SELECT status FROM public.listings WHERE id = '${listing}'`)).rows[0].status, 'active');
+  assert.equal(count(await as(peer, `SELECT count(*) FROM public.payment_receipt_blacklist WHERE receipt_sha256 = '${hash2}'`, 'authenticated', 'cashier')), 1);
+
+  const order3 = (await as(user, `SELECT * FROM public.create_monetization_payment('${listing}', 'boost_24h')`)).rows[0];
+  const proof3 = `${user}/${order3.id}/cccccccc-cccc-4ccc-8ccc-cccccccccccc.jpg`;
+  await db.exec(`INSERT INTO storage.objects(bucket_id, name, owner) VALUES ('payment-proofs', '${proof3}', '${user}')`);
+  await assert.rejects(as(admin, `SELECT * FROM public.submit_monetization_proof(
+    '${user}', '${order3.id}', '${proof3}', '${hash2}', '9876', now()
+  )`, 'service_role', 'admin'), /comprobante está bloqueado/);
+  assert.ok(count(await db.query(`SELECT count(*) FROM public.user_notifications WHERE user_id = '${user}' AND type IN ('payment_confirmed', 'payment_rejected')`)) >= 2);
 });
 
 test('numeric precision, bytea and constraints are native PostgreSQL types', async () => {

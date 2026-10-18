@@ -130,7 +130,8 @@ enum class PaymentStatus {
     @SerialName("review") REVIEW,
     @SerialName("confirmed") CONFIRMED,
     @SerialName("rejected") REJECTED,
-    @SerialName("expired") EXPIRED
+    @SerialName("expired") EXPIRED,
+    @SerialName("cancelled") CANCELLED
 }
 
 @Serializable

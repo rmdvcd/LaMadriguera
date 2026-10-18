@@ -42,6 +42,38 @@ cumplidos. El día de uso del límite se calcula en UTC; propuestas creadas hoy 
 aceptadas hoy cuentan en el límite. La autoexclusión bloquea nuevas apuestas, pero no impide
 cerrar o disputar una ya aceptada.
 
+`migrations/006_monetization_schema.sql` prepara el catálogo de promociones, cuenta destino,
+campos de conciliación, lista negra de comprobantes, bitácora y bucket privado
+`payment-proofs`. Los productos parten con precio `0` e inactivos: no se incluyen tarifas
+ficticias ni se aceptan compras hasta que un rol autorizado registre las tarifas reales y la
+cuenta Transfermóvil.
+
+`migrations/007_monetization_workflow.sql` añade órdenes `pending` con código único y
+vencimiento a las 24 horas, envío de comprobantes a `review`, pausa reversible
+`paused_payment`, conciliación/confirmación/rechazo con motivo, reintentos, hash SHA-256
+único y bloqueo antifraude. Al confirmar crea la promoción, restaura la publicación y emite
+una notificación; al rechazar restaura la publicación y conserva el motivo. El extracto debe
+coincidir en monto, últimos cuatro dígitos y fecha/hora (tolerancia de 15 minutos respecto al
+comprobante, hora de Cuba). El barrido `pg_cron` cancela pendientes vencidos; la app también
+caduca las órdenes propias al abrir pagos o intentar crear otra.
+
+El rol confiable `app_metadata.role = "cashier"` (cobrador), al igual que `"admin"`, puede
+conciliar y configurar cuenta/tarifas; `user_metadata` nunca concede estos permisos. La cola
+admin muestra la evidencia mediante una URL firmada de cinco minutos; el bucket permanece
+privado. La Edge Function `functions/submit-payment-proof` calcula el hash en servidor y usa
+`service_role` solo para leer el objeto y llamar a la RPC protegida:
+
+```sh
+supabase functions deploy submit-payment-proof
+```
+
+Supabase proporciona a la función `SUPABASE_URL`, `SUPABASE_ANON_KEY` y
+`SUPABASE_SERVICE_ROLE_KEY`. No distribuir ni guardar la clave de servicio en Android.
+Después de desplegar, entrar en el panel de conciliación desde un usuario con rol admin o
+cobrador, registrar la cuenta destino y guardar cada tarifa real; cada producto se activa al
+guardar un importe mayor que cero. Si `pg_cron` no está habilitado en el proyecto, habilitar
+la extensión para que el barrido global ejecute cada cinco minutos.
+
 Ejecutar desde el SQL Editor de Supabase como `postgres`, o con conexión administrativa:
 
 ```sh
@@ -50,7 +82,11 @@ psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/002_auth_ident
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/003_listings_auctions.sql
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/004_chat_encryption_disputes.sql
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/005_peer_betting.sql
+psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/006_monetization_schema.sql
+psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/007_monetization_workflow.sql
 ```
+
+Desplegar la función Edge después de aplicar las migraciones: `supabase functions deploy submit-payment-proof`.
 
 No poner la contraseña de PostgreSQL ni la service-role key en Android/local.properties.
 Las tablas de la aplicación tienen RLS activada, índices, claves foráneas y restricciones.
@@ -65,8 +101,10 @@ Los IDs se pueden generar con `UUID.randomUUID().toString()`; `profiles` usa `us
 - `users`: solo lectura propia, incluso para un JWT admin. Actualización propia de `phone`.
   Ese campo es un dato de contacto, **no una prueba de verificación telefónica**: la
   verificación real debe pasar por Supabase Auth/backend.
-- Roles en el JWT: `app_metadata.role = "admin"` o `"moderator"`. Solo el backend mediante
-  la API administrativa debe asignarlos. `user_metadata` no concede privilegios.
+- Roles en el JWT: `app_metadata.role = "admin"`, `"moderator"` o `"cashier"` (cobrador
+  de pagos). Solo el backend mediante la API administrativa debe asignarlos. `user_metadata`
+  no concede privilegios. `cashier` solo recibe acceso al flujo de monetización, no permisos
+  generales de administración.
 - Un JWT admin puede leer y revisar verificaciones de identidad; no adquiere acceso
   general a chats. Los moderadores/admin solo leen chats con `status = 'disputed'`.
 - Un participante abre la disputa con la RPC `open_conversation_dispute(conversation_id)`.
@@ -128,7 +166,7 @@ Gradle las copia a `BuildConfig`. `SupabaseClientProvider`, singleton Hilt, inst
 Postgrest, Storage y Realtime con OkHttp y una serialización JSON común. El JWT de la sesión
 Auth se aplica automáticamente a las peticiones; no se envía un `user_id` como autorización.
 
-- `data/remote/supabase/row/*Row.kt`: 22 data classes `@Serializable`, con `@SerialName`
+- `data/remote/supabase/row/*Row.kt`: 25 data classes `@Serializable`, con `@SerialName`
   para nombres SQL y enums con valores de wire en minúsculas.
 - `domain/model`: modelos sin detalles de PostgREST, `BigDecimal` para todo `numeric`,
   `Instant`/`LocalDate` para fechas y `ByteArray` para `bytea`.
@@ -147,7 +185,8 @@ Auth se aplica automáticamente a las peticiones; no se envía un `user_id` como
 | CategoriesRepository, ListingsRepository | list/find/create/update/delete |
 | BidsRepository, MessagesRepository, ReviewsRepository | list/find/create |
 | ConversationsRepository | list/find/create/update (claves y reveal_policy) |
-| ReportsRepository, PaymentsRepository | list/find/create |
+| ReportsRepository | list/find/create |
+| PaymentsRepository | list/find; órdenes, comprobantes y conciliación por RPC/Edge Function |
 | BoostsRepository, ModerationActionsRepository | list/find |
 | BettingGroupsRepository | list/find/create/update (nombre, tema, visibilidad) |
 | BettingGroupMembersRepository | list/find (solo lectura; altas/bajas por RPC) |
@@ -206,13 +245,14 @@ class LoadListings @Inject constructor(private val repository: ListingsRepositor
 - La app no procesa ni garantiza pagos: **el pago se acuerda y ejecuta fuera de la app**.
   No hay escrow, saldo, transferencia, comisión ni confirmación de pago en este feature.
 
-Antes de producción aún se requieren procesos backend para activación/verificación,
-estados y antifraude de subastas, confirmación de Transfermóvil, boosts, cálculo de
-reputación y moderación. Los documentos y claves deben cifrarse antes de persistir: `bytea`
-no cifra por sí mismo. También deben implementarse purga de documentos según
-`retention_until`, purga de mensajes según `expires_at`, política de retención para las
-capturas de apuestas y gestión/rotación de claves. La RLS no elimina archivos ni aplica
-automáticamente políticas de retención.
+Antes de producción aún se requiere una prueba de integración con un proyecto Supabase,
+configurar la cuenta Transfermóvil y las tarifas reales, desplegar la Edge Function y confirmar
+que `pg_cron` está habilitado. También siguen pendientes procesos backend para
+activación/verificación, antifraude de subastas, cálculo de reputación y moderación. Los
+documentos y claves deben cifrarse antes de persistir: `bytea` no cifra por sí mismo. También
+deben implementarse purga de documentos según `retention_until`, purga de mensajes según
+`expires_at`, política de retención para comprobantes y capturas de apuestas y gestión/rotación
+de claves. La RLS no elimina archivos ni aplica automáticamente políticas de retención.
 
 ## Pruebas
 
@@ -229,8 +269,10 @@ pruebas cubren RLS, acceso propio/participante/owner, permisos de columna, restr
 precisión numeric; también comparan columnas y enums SQL con los nombres wire de Kotlin.
 Incluyen las reglas de apuestas: carnet y mayoría de edad, moneda/cuotas opcionales, tope
 atómico, evidencia, transición a disputa, decisión del owner, autoexclusión de 30 días,
-Storage privado e historial append-only. Esto no sustituye una prueba de integración en un
-proyecto Supabase antes de desplegar.
+Storage privado e historial append-only. La monetización verifica catálogo desactivado hasta
+configurar tarifas, bloqueo sin cuenta destino, permisos de cobrador, hash/lista negra,
+conciliación con monto/horario, restauración de publicaciones, reintentos y notificaciones.
+Esto no sustituye una prueba de integración en un proyecto Supabase antes de desplegar.
 
 ### JVM (requiere JDK 17, Android SDK 35 y dependencias Gradle)
 
@@ -241,5 +283,6 @@ proyecto Supabase antes de desplegar.
 `RowMappersTest`: round-trip row/dominio y JSON de las tablas, nombres snake_case,
 defaults/nulls, enums, precisión decimal, timestamps con offset, fecha civil y bytea
 (incluyendo referencias malformadas). `BettingRulesTest` cubre elegibilidad 18+, límites y
-evidencia; `RepositoryRequestTest` cubre Result y cancelación.
-Las pruebas no requieren credenciales ni conexión a Supabase.
+evidencia; `MonetizationRulesTest` cubre boosts pagados, slots 1/5, alcance geográfico y
+hora de Cuba; `RepositoryRequestTest` cubre Result y cancelación. Las pruebas no requieren
+credenciales ni conexión a Supabase.

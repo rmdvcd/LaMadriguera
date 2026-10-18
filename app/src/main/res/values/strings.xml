@@ -85,7 +85,7 @@
     <string name="listings_filter_category_all">Todas las categorías</string>
     <string name="listings_kind_offer">Oferta</string>
     <string name="listings_kind_request">Demanda</string>
-    <string name="listings_badge_boosted">Destacado ×1.3</string>
+    <string name="listings_badge_boosted">Promocionado</string>
     <string name="listings_badge_auction">Subasta</string>
     <string name="listings_badge_providers_only">Solo proveedores</string>
     <string name="listings_price_negotiable">A convenir</string>
@@ -224,7 +224,8 @@
     <string name="betting_my_bets">Mis apuestas</string>
 
     <!-- Pagos -->
-    <string name="payments_title">Pagos y saldo</string>
+    <string name="payments_title">Pagos y promociones</string>
+    <string name="payments_admin_queue">Conciliación de pagos</string>
     <string name="payments_balance">Saldo</string>
     <string name="payments_deposit">Recargar</string>
     <string name="payments_withdraw">Retirar</string>

@@ -9,5 +9,7 @@ data class Boost(
     val tier: String,
     val startsAt: Instant,
     val endsAt: Instant,
-    val paymentId: String
+    val paymentId: String,
+    val productType: ProductType = ProductType.BOOST,
+    val reachScope: PromotionScope? = null
 )

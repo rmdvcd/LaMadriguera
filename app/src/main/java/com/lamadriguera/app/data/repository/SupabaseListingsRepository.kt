@@ -6,6 +6,7 @@ import com.lamadriguera.app.data.mapper.toDomain
 import com.lamadriguera.app.data.mapper.toRow
 import com.lamadriguera.app.data.remote.supabase.SupabaseJson
 import com.lamadriguera.app.data.remote.supabase.row.BidRow
+import com.lamadriguera.app.data.remote.supabase.row.BoostRow
 import com.lamadriguera.app.data.remote.supabase.row.CategoryRow
 import com.lamadriguera.app.data.remote.supabase.row.ListingRow
 import com.lamadriguera.app.data.remote.supabase.row.ProfileRow
@@ -330,6 +331,21 @@ class SupabaseListingsRepository @Inject constructor(
             ).associate { it.id to it.name }
         }.getOrDefault(emptyMap())
 
+        val now = Instant.now()
+        val promotionMap = runCatching {
+            val listingIds = listings.map { it.id }
+            if (listingIds.isEmpty()) emptyMap() else {
+                val promotionsData = client.from("boosts").select {
+                    filter { isIn("listing_id", listingIds) }
+                    order("starts_at", Order.DESCENDING)
+                }.data
+                SupabaseJson.decodeFromString(ListSerializer(BoostRow.serializer()), promotionsData)
+                    .map { it.toDomain() }
+                    .filter { it.startsAt <= now && it.endsAt > now }
+                    .groupBy { it.listingId }
+            }
+        }.getOrDefault(emptyMap())
+
         val candidates = listings
             .filter { it.status != ListingStatus.CLOSED && it.status != ListingStatus.PAUSED_PAYMENT }
             .map { listing ->
@@ -345,7 +361,8 @@ class SupabaseListingsRepository @Inject constructor(
                     ownerReviewsCount = ownerProfile?.reviewsCount ?: 0,
                     ownerDisplayName = displayName,
                     categoryName = categoriesMap[listing.categoryId].orEmpty(),
-                    responseRate = 0.8
+                    responseRate = 0.8,
+                    activePromotions = promotionMap[listing.id].orEmpty()
                 )
             }
 

@@ -17,12 +17,12 @@ import kotlinx.coroutines.launch
 /**
  * Estado de la lista de hilos: conversaciones activas con vista previa del
  * último mensaje (descifrada solo en memoria) y badge de no leídos, más el
- * aviso persistente de que un hilo del usuario fue descifrado por moderación.
+ * aviso persistente de notificaciones del sistema (pagos, moderación y seguridad).
  */
 data class ConversationListUiState(
     val isLoading: Boolean = true,
     val items: List<ConversationSummary> = emptyList(),
-    val decryptedNotice: ChatNotification? = null,
+    val systemNotice: ChatNotification? = null,
     val errorMessage: String? = null
 )
 
@@ -36,7 +36,7 @@ class ConversationListViewModel @Inject constructor(
 
     init {
         refresh()
-        loadDisputeNotifications()
+        loadUnreadNotifications()
     }
 
     fun refresh() {
@@ -59,29 +59,23 @@ class ConversationListViewModel @Inject constructor(
         }
     }
 
-    /** Notificaciones de disputa: "tu hilo fue descifrado por un moderador". */
-    private fun loadDisputeNotifications() {
+    /** Muestra primero la notificación no leída más reciente, incluidas las de pagos. */
+    private fun loadUnreadNotifications() {
         viewModelScope.launch {
             when (val result = chatRepository.getUnreadNotifications()) {
-                is Result.Success -> {
-                    val notice = result.data.firstOrNull { it.type == TYPE_THREAD_DECRYPTED }
-                        ?: result.data.firstOrNull()
-                    _uiState.update { it.copy(decryptedNotice = notice) }
-                }
+                is Result.Success -> _uiState.update { it.copy(systemNotice = result.data.firstOrNull()) }
                 is Result.Error -> Unit // no bloquea el listado
             }
         }
     }
 
     fun dismissNotifications() {
-        val notice = _uiState.value.decryptedNotice ?: return
-        _uiState.update { it.copy(decryptedNotice = null) }
+        val notice = _uiState.value.systemNotice ?: return
+        _uiState.update { it.copy(systemNotice = null) }
         viewModelScope.launch {
             chatRepository.markNotificationsRead(listOf(notice.id))
+            loadUnreadNotifications()
         }
     }
 
-    private companion object {
-        const val TYPE_THREAD_DECRYPTED = "thread_decrypted"
-    }
 }
