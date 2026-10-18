@@ -275,6 +275,74 @@
     <!-- Moderación -->
     <string name="moderation_title">Centro de moderación</string>
     <string name="moderation_reports">Reportes</string>
+    <string name="moderation_queue_subtitle">%1$d elementos · %2$d pendientes</string>
+    <string name="moderation_filter_status">Estado</string>
+    <string name="moderation_filter_severity">Severidad</string>
+    <string name="moderation_filter_all">Todos</string>
+    <string name="moderation_status_pending">Pendiente</string>
+    <string name="moderation_status_in_review">En revisión</string>
+    <string name="moderation_status_resolved">Resuelta</string>
+    <string name="moderation_status_dismissed">Descartada</string>
+    <string name="moderation_severity_high">Alta (≥ 4)</string>
+    <string name="moderation_severity_medium">Media (≥ 2)</string>
+    <string name="moderation_severity_any">Cualquiera</string>
+    <string name="moderation_queue_empty">La cola está vacía: solo llega lo dudoso.</string>
+    <string name="moderation_queue_empty_filtered">No hay elementos con estos filtros.</string>
+    <string name="moderation_source_ai">IA</string>
+    <string name="moderation_source_user_report">Reporte de usuario</string>
+    <string name="moderation_action_warn">Avisar</string>
+    <string name="moderation_action_hide">Ocultar</string>
+    <string name="moderation_action_suspend">Suspender 30 días</string>
+    <string name="moderation_action_ban">Expulsar</string>
+    <string name="moderation_action_dismiss">Descartar</string>
+    <string name="moderation_reason_hint">Motivo de la sanción…</string>
+    <string name="moderation_reason_required">Indica el motivo de la sanción</string>
+    <string name="moderation_hide_note">El contenido se marcará oculto y se guardará evidencia; nunca se borra.</string>
+    <string name="moderation_private_note">La plataforma no modera el chat privado; los reportes se registran y solo se actúa si hay disputa.</string>
+    <string name="moderation_applied">Sanción aplicada y registrada</string>
+    <string name="moderation_dismissed">Revisión descartada</string>
+    <string name="moderation_target_listing">Publicación</string>
+    <string name="moderation_target_group_message">Mensaje de grupo</string>
+    <string name="moderation_target_bet">Apuesta</string>
+    <string name="moderation_target_profile">Perfil</string>
+    <string name="moderation_target_message">Mensaje privado</string>
+    <string name="moderation_target_betting_group">Grupo</string>
+
+    <!-- Reportar contenido -->
+    <string name="report_button">Reportar</string>
+    <string name="report_title">Reportar contenido</string>
+    <string name="report_body">La plataforma recibirá tu reporte. El contenido no se borra; un moderador revisará el caso. En el chat privado no se modera el contenido, pero tu reporte queda registrado.</string>
+    <string name="report_category_spam">Spam</string>
+    <string name="report_category_scam">Estafa</string>
+    <string name="report_category_harassment">Acoso</string>
+    <string name="report_category_violence">Violencia</string>
+    <string name="report_category_sexual">Contenido sexual</string>
+    <string name="report_category_illegal_gambling">Apuestas ilegales</string>
+    <string name="report_category_other">Otro</string>
+    <string name="report_reason_hint">Cuenta qué pasó…</string>
+    <string name="report_submit">Enviar reporte</string>
+    <string name="report_done">Reporte enviado. Gracias por cuidar La Madriguera.</string>
+
+    <!-- Panel de administración de grupo -->
+    <string name="group_admin_title">Panel del grupo</string>
+    <string name="group_admin_rules_title">Reglas del grupo</string>
+    <string name="group_admin_rules_hint">Reglas visibles para todos los miembros</string>
+    <string name="group_admin_rules_default">Sé respetuoso. No publiques datos personales ajenos ni enlaces sospechosos. Las apuestas son acuerdos entre adultos; la plataforma no procesa pagos.</string>
+    <string name="group_admin_rules_saved">Reglas guardadas</string>
+    <string name="group_admin_reports_title">Reportes y revisiones</string>
+    <string name="group_admin_reports_empty">No hay reportes ni revisiones en este grupo.</string>
+    <string name="group_admin_members_title">Miembros</string>
+    <string name="group_admin_expel">Expulsar</string>
+    <string name="group_admin_expel_confirm">¿Expulsar a este miembro del grupo? Podrá volver a ser invitado.</string>
+    <string name="group_admin_expelled">Miembro expulsado</string>
+    <string name="group_admin_only_owner">Solo el administrador del grupo ve este panel.</string>
+    <string name="group_admin_open">Panel de administración</string>
+    <string name="group_wall_title">Muro del grupo</string>
+    <string name="group_wall_hint">Mensaje para el grupo…</string>
+    <string name="group_wall_send">Publicar</string>
+    <string name="group_wall_posted">Mensaje publicado</string>
+    <string name="group_wall_hidden">Oculto por moderación</string>
+    <string name="group_wall_empty">Aún no hay mensajes. Publica el primero.</string>
 
     <!-- Común -->
     <string name="common_loading">Cargando…</string>

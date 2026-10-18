@@ -40,5 +40,11 @@ data class ListingRow(
     val createdAt: String,
     @SerialName("photo_url")
     val photoUrl: String? = null,
-    val visibility: ListingVisibility = ListingVisibility.PUBLIC
+    val visibility: ListingVisibility = ListingVisibility.PUBLIC,
+    @SerialName("hidden_at")
+    val hiddenAt: String? = null,
+    @SerialName("hidden_by")
+    val hiddenBy: String? = null,
+    @SerialName("hidden_reason")
+    val hiddenReason: String? = null
 )

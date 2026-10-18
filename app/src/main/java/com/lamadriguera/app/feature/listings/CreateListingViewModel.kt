@@ -11,6 +11,9 @@ import com.lamadriguera.app.domain.model.CubanMunicipalities
 import com.lamadriguera.app.domain.model.CubanMunicipality
 import com.lamadriguera.app.domain.model.Listing
 import com.lamadriguera.app.domain.model.ListingDraft
+import com.lamadriguera.app.domain.model.ModeratedContent
+import com.lamadriguera.app.domain.model.ModerationDecision
+import com.lamadriguera.app.domain.model.ModerationTargetType
 import com.lamadriguera.app.domain.model.ListingKind
 import com.lamadriguera.app.domain.model.ListingVisibility
 import com.lamadriguera.app.domain.model.PrivacyLevel
@@ -21,6 +24,8 @@ import com.lamadriguera.app.domain.repository.CategoriesRepository
 import com.lamadriguera.app.domain.repository.ListingsRepository
 import com.lamadriguera.app.domain.usecase.AuctionConfigValidator
 import com.lamadriguera.app.domain.usecase.ImageCompressor
+import com.lamadriguera.app.domain.usecase.ImageUploadGate
+import com.lamadriguera.app.domain.usecase.ModerateContentUseCase
 import com.lamadriguera.app.domain.usecase.ListingValidator
 import com.lamadriguera.app.feature.auction.AuctionConfigUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -59,6 +64,7 @@ data class CreateListingUiState(
     val canEditAuction: Boolean = true,
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
+    val message: String? = null,
     val savedListing: Listing? = null
 ) {
     val photoSizeKb: Int?
@@ -72,7 +78,9 @@ class CreateListingViewModel @Inject constructor(
     private val categoriesRepository: CategoriesRepository,
     private val listingsRepository: ListingsRepository,
     private val auctionRepository: AuctionRepository,
-    private val imageCompressor: ImageCompressor
+    private val imageCompressor: ImageCompressor,
+    private val moderateContent: ModerateContentUseCase,
+    private val imageUploadGate: ImageUploadGate
 ) : ViewModel() {
 
     private val editingListingId: String? = savedStateHandle["listingId"]
@@ -216,11 +224,24 @@ class CreateListingViewModel @Inject constructor(
      */
     fun onPhotoSelected(rawBytes: ByteArray) {
         when (val result = imageCompressor.compressForListing(rawBytes)) {
-            is Result.Success -> _uiState.update {
-                it.copy(
-                    compressedPhotoBytes = result.data,
-                    errorMessage = null
-                )
+            is Result.Success -> {
+                // IA en imágenes (NSFW.js en cliente): si es dudosa, no se sube.
+                val compressed = result.data
+                viewModelScope.launch {
+                    when (val gate = imageUploadGate.check(compressed)) {
+                        is Result.Success -> when (val outcome = gate.data) {
+                            is ImageUploadGate.Outcome.Allowed -> _uiState.update {
+                                it.copy(compressedPhotoBytes = compressed, errorMessage = null)
+                            }
+                            is ImageUploadGate.Outcome.Refused -> _uiState.update {
+                                it.copy(compressedPhotoBytes = null, errorMessage = outcome.message)
+                            }
+                        }
+                        is Result.Error -> _uiState.update {
+                            it.copy(errorMessage = gate.message ?: ListingValidator.MSG_PHOTO_FORMAT)
+                        }
+                    }
+                }
             }
             is Result.Error -> _uiState.update {
                 it.copy(
@@ -428,14 +449,54 @@ class CreateListingViewModel @Inject constructor(
 
         _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
         viewModelScope.launch {
+            // Moderación de texto (reglas de dominio + IA) ANTES de publicar.
+            val decision = when (
+                val moderation = moderateContent.moderate(
+                    ModeratedContent(
+                        targetType = ModerationTargetType.LISTING,
+                        title = draft.title,
+                        body = draft.description
+                    )
+                )
+            ) {
+                is Result.Success -> moderation.data
+                is Result.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            isSubmitting = false,
+                            errorMessage = moderation.message ?: "No se pudo verificar el contenido"
+                        )
+                    }
+                    return@launch
+                }
+            }
+            if (decision is ModerationDecision.Blocked) {
+                _uiState.update { it.copy(isSubmitting = false, errorMessage = decision.userMessage) }
+                return@launch
+            }
+
             val result = if (state.editingListingId.isNullOrBlank()) {
                 listingsRepository.createFromDraft(draft)
             } else {
                 listingsRepository.updateFromDraft(state.editingListingId, draft)
             }
             when (result) {
-                is Result.Success -> _uiState.update {
-                    it.copy(isSubmitting = false, savedListing = result.data)
+                is Result.Success -> {
+                    if (decision is ModerationDecision.Doubtful) {
+                        // Solo lo dudoso (umbral bajo) llega a la cola humana.
+                        moderateContent.flagDoubtful(
+                            targetType = ModerationTargetType.LISTING,
+                            targetId = result.data.id,
+                            decision = decision
+                        )
+                    }
+                    _uiState.update {
+                        it.copy(
+                            isSubmitting = false,
+                            savedListing = result.data,
+                            message = decision.userMessage.ifBlank { null }
+                        )
+                    }
                 }
                 is Result.Error -> _uiState.update {
                     it.copy(

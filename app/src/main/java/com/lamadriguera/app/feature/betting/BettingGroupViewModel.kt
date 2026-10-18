@@ -8,11 +8,17 @@ import com.lamadriguera.app.domain.model.Bet
 import com.lamadriguera.app.domain.model.BettingControls
 import com.lamadriguera.app.domain.model.BettingGroup
 import com.lamadriguera.app.domain.model.BettingGroupMember
+import com.lamadriguera.app.domain.model.GroupMessage
+import com.lamadriguera.app.domain.model.ModeratedContent
+import com.lamadriguera.app.domain.model.ModerationDecision
+import com.lamadriguera.app.domain.model.ModerationTargetType
 import com.lamadriguera.app.domain.model.IdentityVerification
 import com.lamadriguera.app.domain.repository.AuthRepository
 import com.lamadriguera.app.domain.repository.BettingRepository
+import com.lamadriguera.app.domain.repository.GroupMessagesRepository
 import com.lamadriguera.app.domain.repository.IdentityVerificationsRepository
 import com.lamadriguera.app.domain.usecase.BettingEligibility
+import com.lamadriguera.app.domain.usecase.ModerateContentUseCase
 import com.lamadriguera.app.domain.usecase.BettingRules
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.math.BigDecimal
@@ -34,6 +40,8 @@ data class BettingGroupUiState(
     val group: BettingGroup? = null,
     val members: List<BettingGroupMember> = emptyList(),
     val groupBets: List<Bet> = emptyList(),
+    val wallMessages: List<GroupMessage> = emptyList(),
+    val wallDraft: String = "",
     val myBets: List<Bet> = emptyList(),
     val myBetsAvailable: Boolean = false,
     val controls: BettingControls? = null,
@@ -64,7 +72,9 @@ class BettingGroupViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val authRepository: AuthRepository,
     private val bettingRepository: BettingRepository,
-    private val identityVerifications: IdentityVerificationsRepository
+    private val identityVerifications: IdentityVerificationsRepository,
+    private val moderateContent: ModerateContentUseCase,
+    private val groupMessages: GroupMessagesRepository
 ) : ViewModel() {
 
     private val routeGroupId: String? = savedStateHandle["groupId"]
@@ -111,6 +121,7 @@ class BettingGroupViewModel @Inject constructor(
             var group: BettingGroup? = null
             var members = emptyList<BettingGroupMember>()
             var groupBets = emptyList<Bet>()
+            var wallMessages = emptyList<GroupMessage>()
             var groupLoadError: String? = null
             if (groupId != null) {
                 when (val result = bettingRepository.getGroup(groupId)) {
@@ -126,6 +137,7 @@ class BettingGroupViewModel @Inject constructor(
                         is Result.Success -> groupBets = result.data
                         is Result.Error -> groupLoadError = groupLoadError ?: result.message
                     }
+                    wallMessages = (groupMessages.listForGroup(groupId) as? Result.Success)?.data.orEmpty()
                 }
             }
 
@@ -147,6 +159,7 @@ class BettingGroupViewModel @Inject constructor(
                     group = group,
                     members = members,
                     groupBets = groupBets,
+                    wallMessages = wallMessages,
                     myBets = myBets,
                     myBetsAvailable = myBetsResult is Result.Success,
                     controls = controls,
@@ -174,15 +187,45 @@ class BettingGroupViewModel @Inject constructor(
         }
         _uiState.update { it.copy(isBusy = true, errorMessage = null, message = null) }
         viewModelScope.launch {
-            when (val result = bettingRepository.createGroup(name, topic, visibility)) {
-                is Result.Success -> _uiState.update {
-                    it.copy(
-                        isBusy = false,
-                        groups = listOf(result.data) + it.groups.filterNot { group -> group.id == result.data.id },
-                        memberGroupIds = it.memberGroupIds + result.data.id,
-                        createdGroupId = result.data.id,
-                        message = "Grupo creado. Tú eres su administrador."
+            val decision = when (
+                val moderation = moderateContent.moderate(
+                    ModeratedContent(
+                        targetType = ModerationTargetType.BETTING_GROUP,
+                        title = name,
+                        body = topic
                     )
+                )
+            ) {
+                is Result.Success -> moderation.data
+                is Result.Error -> {
+                    _uiState.update {
+                        it.copy(isBusy = false, errorMessage = moderation.message ?: "No se pudo verificar el contenido.")
+                    }
+                    return@launch
+                }
+            }
+            if (decision is ModerationDecision.Blocked) {
+                _uiState.update { it.copy(isBusy = false, errorMessage = decision.userMessage) }
+                return@launch
+            }
+            when (val result = bettingRepository.createGroup(name, topic, visibility)) {
+                is Result.Success -> {
+                    if (decision is ModerationDecision.Doubtful) {
+                        moderateContent.flagDoubtful(
+                            targetType = ModerationTargetType.BETTING_GROUP,
+                            targetId = result.data.id,
+                            decision = decision
+                        )
+                    }
+                    _uiState.update {
+                        it.copy(
+                            isBusy = false,
+                            groups = listOf(result.data) + it.groups.filterNot { group -> group.id == result.data.id },
+                            memberGroupIds = it.memberGroupIds + result.data.id,
+                            createdGroupId = result.data.id,
+                            message = "Grupo creado. Tú eres su administrador."
+                        )
+                    }
                 }
                 is Result.Error -> _uiState.update {
                     it.copy(isBusy = false, errorMessage = result.message ?: "No se pudo crear el grupo.")
@@ -193,6 +236,63 @@ class BettingGroupViewModel @Inject constructor(
 
     fun clearCreatedGroupId() {
         _uiState.update { it.copy(createdGroupId = null) }
+    }
+
+    fun onWallDraftChanged(draft: String) {
+        _uiState.update { it.copy(wallDraft = draft.take(1000)) }
+    }
+
+    /**
+     * Publica en el muro del grupo tras pasar la moderación de texto.
+     * Grave → se bloquea; dudoso → se publica y entra a la cola humana.
+     */
+    fun postWallMessage() {
+        val state = _uiState.value
+        val groupId = state.groupId ?: return
+        val body = state.wallDraft.trim()
+        if (body.isEmpty() || state.isBusy) return
+        _uiState.update { it.copy(isBusy = true, errorMessage = null, message = null) }
+        viewModelScope.launch {
+            val decision = when (
+                val moderation = moderateContent.moderate(
+                    ModeratedContent(targetType = ModerationTargetType.GROUP_MESSAGE, body = body)
+                )
+            ) {
+                is Result.Success -> moderation.data
+                is Result.Error -> {
+                    _uiState.update {
+                        it.copy(isBusy = false, errorMessage = moderation.message ?: "No se pudo verificar el mensaje.")
+                    }
+                    return@launch
+                }
+            }
+            if (decision is ModerationDecision.Blocked) {
+                _uiState.update { it.copy(isBusy = false, errorMessage = decision.userMessage) }
+                return@launch
+            }
+            when (val result = groupMessages.post(groupId, body)) {
+                is Result.Success -> {
+                    if (decision is ModerationDecision.Doubtful) {
+                        moderateContent.flagDoubtful(
+                            targetType = ModerationTargetType.GROUP_MESSAGE,
+                            targetId = result.data.id,
+                            decision = decision
+                        )
+                    }
+                    _uiState.update {
+                        it.copy(
+                            isBusy = false,
+                            wallDraft = "",
+                            wallMessages = listOf(result.data) + it.wallMessages,
+                            message = decision.userMessage.ifBlank { "Mensaje publicado" }
+                        )
+                    }
+                }
+                is Result.Error -> _uiState.update {
+                    it.copy(isBusy = false, errorMessage = result.message ?: "No se pudo publicar el mensaje.")
+                }
+            }
+        }
     }
 
     fun joinGroup(groupId: String) {

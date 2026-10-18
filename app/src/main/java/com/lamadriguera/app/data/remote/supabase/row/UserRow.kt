@@ -13,5 +13,7 @@ data class UserRow(
     val verificationLevel: VerificationLevel = VerificationLevel.NONE,
     val status: UserStatus = UserStatus.TEMP,
     @SerialName("created_at")
-    val createdAt: String
+    val createdAt: String,
+    @SerialName("suspended_until")
+    val suspendedUntil: String? = null
 )

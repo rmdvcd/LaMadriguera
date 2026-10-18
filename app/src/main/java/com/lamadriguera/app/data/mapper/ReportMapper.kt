@@ -13,7 +13,9 @@ fun ReportRow.toDomain(): Report = Report(
     evidenceUrl = evidenceUrl,
     status = status,
     handledBy = handledBy,
-    createdAt = Instant.parse(createdAt)
+    createdAt = Instant.parse(createdAt),
+    category = category,
+    severity = severity
 )
 
 fun Report.toRow(): ReportRow = ReportRow(
@@ -25,5 +27,7 @@ fun Report.toRow(): ReportRow = ReportRow(
     evidenceUrl = evidenceUrl,
     status = status,
     handledBy = handledBy,
-    createdAt = createdAt.toString()
+    createdAt = createdAt.toString(),
+    category = category,
+    severity = severity
 )

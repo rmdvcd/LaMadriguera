@@ -25,7 +25,10 @@ fun BetRow.toDomain(): Bet = Bet(
     acceptedAt = acceptedAt?.let(Instant::parse),
     decisionBy = decisionBy,
     decisionNote = decisionNote,
-    createdAt = Instant.parse(createdAt)
+    createdAt = Instant.parse(createdAt),
+    hiddenAt = hiddenAt?.let(Instant::parse),
+    hiddenBy = hiddenBy,
+    hiddenReason = hiddenReason
 )
 
 fun Bet.toRow(): BetRow = BetRow(
@@ -45,7 +48,10 @@ fun Bet.toRow(): BetRow = BetRow(
     acceptedAt = acceptedAt?.toString(),
     decisionBy = decisionBy,
     decisionNote = decisionNote,
-    createdAt = createdAt.toString()
+    createdAt = createdAt.toString(),
+    hiddenAt = hiddenAt?.toString(),
+    hiddenBy = hiddenBy,
+    hiddenReason = hiddenReason
 )
 
 fun BetEventRow.toDomain(): BetEvent = BetEvent(

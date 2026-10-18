@@ -43,6 +43,7 @@ sealed interface Destinations {
     @Serializable data class BetDetail(val betId: String) : Destinations
     @Serializable data class CreateBet(val groupId: String) : Destinations
     @Serializable data object MyBets : Destinations
+    @Serializable data class GroupAdminPanel(val groupId: String) : Destinations
 
     // --- Perfil ---
     @Serializable data object Profile : Destinations

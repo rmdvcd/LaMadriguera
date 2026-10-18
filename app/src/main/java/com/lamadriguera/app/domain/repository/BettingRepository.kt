@@ -27,6 +27,9 @@ interface BettingRepository {
     suspend fun inviteMemberByPhone(groupId: String, phone: String): Result<BettingGroupMember>
     suspend fun removeMember(groupId: String, userId: String): Result<Unit>
 
+    /** Reglas visibles del grupo; solo el admin responsable (owner) las edita. */
+    suspend fun setGroupRules(groupId: String, rules: String): Result<BettingGroup>
+
     suspend fun getGroupBets(groupId: String): Result<List<Bet>>
     /** Historial completo de apuestas en las que participa la sesión actual. */
     suspend fun getMyBets(): Result<List<Bet>>

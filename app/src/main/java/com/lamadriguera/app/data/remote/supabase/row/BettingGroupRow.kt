@@ -15,5 +15,6 @@ data class BettingGroupRow(
     val visibility: String = "private",
     val status: String = "active",
     @SerialName("created_at")
-    val createdAt: String
+    val createdAt: String,
+    val rules: String = ""
 )

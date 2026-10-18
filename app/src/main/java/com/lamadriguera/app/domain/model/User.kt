@@ -8,5 +8,7 @@ data class User(
     val phone: String? = null,
     val verificationLevel: VerificationLevel = VerificationLevel.NONE,
     val status: UserStatus = UserStatus.TEMP,
-    val createdAt: Instant
+    val createdAt: Instant,
+    /** Suspensión temporal de 30 días; vencida vuelve a 'active' (expire_user_suspensions). */
+    val suspendedUntil: Instant? = null
 )

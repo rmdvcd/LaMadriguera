@@ -62,6 +62,10 @@ import com.lamadriguera.app.feature.payments.PaymentScreen
 import com.lamadriguera.app.feature.payments.PaymentViewModel
 import com.lamadriguera.app.feature.payments.AdminPaymentQueueScreen
 import com.lamadriguera.app.feature.payments.AdminPaymentQueueViewModel
+import com.lamadriguera.app.feature.moderation.AdminQueueScreen
+import com.lamadriguera.app.feature.moderation.AdminQueueViewModel
+import com.lamadriguera.app.feature.moderation.GroupAdminPanel
+import com.lamadriguera.app.feature.moderation.GroupAdminPanelViewModel
 import com.lamadriguera.app.ui.components.ErrorState
 import com.lamadriguera.app.ui.components.LaMadrigueraBottomBar
 import com.lamadriguera.app.ui.components.LaMadrigueraTopBar
@@ -499,7 +503,14 @@ fun LaMadrigueraNavGraph(
                     onRemoveMember = viewModel::removeMember,
                     onDailyLimitChanged = viewModel::onDailyLimitInputChanged,
                     onSaveDailyLimit = viewModel::saveDailyLimit,
-                    onSelfExclude = viewModel::selfExclude
+                    onSelfExclude = viewModel::selfExclude,
+                    onOpenGroupAdmin = {
+                        state.groupId?.let { id -> navController.navigate(Destinations.GroupAdminPanel(id)) }
+                    },
+                    wallMessages = state.wallMessages,
+                    wallDraft = state.wallDraft,
+                    onWallDraftChanged = viewModel::onWallDraftChanged,
+                    onPostWallMessage = viewModel::postWallMessage
                 )
             }
             composable<Destinations.BetDetail> {
@@ -677,9 +688,37 @@ fun LaMadrigueraNavGraph(
                 PlaceholderScreen(R.string.screen_transactions)
             }
 
-            // Moderación
+            // Moderación (cola humana: solo lo dudoso + reportes)
             composable<Destinations.Moderation> {
-                PlaceholderScreen(R.string.moderation_title)
+                val viewModel: AdminQueueViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                AdminQueueScreen(
+                    state = state,
+                    onRefresh = viewModel::refresh,
+                    onStatusFilterChanged = viewModel::onStatusFilterChanged,
+                    onSeverityFilterChanged = viewModel::onSeverityFilterChanged,
+                    onOpenItem = viewModel::openItem,
+                    onCloseItem = viewModel::closeItem,
+                    onReasonChanged = viewModel::onReasonChanged,
+                    onApplySanction = viewModel::applySanction,
+                    onDismissReview = viewModel::dismissReview
+                )
+            }
+            composable<Destinations.GroupAdminPanel> {
+                val viewModel: GroupAdminPanelViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                GroupAdminPanel(
+                    state = state,
+                    onRefresh = viewModel::refresh,
+                    onRulesChanged = viewModel::onRulesChanged,
+                    onSaveRules = viewModel::saveRules,
+                    onExpelMember = viewModel::expelMember,
+                    onOpenReview = viewModel::openReview,
+                    onCloseReview = viewModel::closeReview,
+                    onReasonChanged = viewModel::onReasonChanged,
+                    onApplySanction = viewModel::applySanction,
+                    onDismissReview = viewModel::dismissReview
+                )
             }
             composable<Destinations.Reports> {
                 PlaceholderScreen(R.string.moderation_reports)
@@ -725,6 +764,7 @@ private fun NavDestination.topBarTitleRes(): Int = when {
     hasRoute<Destinations.BetDetail>() -> R.string.screen_bet_detail
     hasRoute<Destinations.CreateBet>() -> R.string.screen_create_bet
     hasRoute<Destinations.MyBets>() -> R.string.betting_my_bets
+    hasRoute<Destinations.GroupAdminPanel>() -> R.string.group_admin_title
     hasRoute<Destinations.Profile>() -> R.string.profile_title
     hasRoute<Destinations.EditProfile>() -> R.string.profile_edit
     hasRoute<Destinations.Settings>() -> R.string.profile_settings

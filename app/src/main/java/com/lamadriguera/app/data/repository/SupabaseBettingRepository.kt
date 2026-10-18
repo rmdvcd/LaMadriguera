@@ -153,6 +153,20 @@ class SupabaseBettingRepository @Inject constructor(
         }
     }
 
+    override suspend fun setGroupRules(groupId: String, rules: String): Result<BettingGroup> {
+        if (groupId.isBlank()) return Result.Error(AppError.Validation("Grupo no válido."))
+        return request {
+            val data = client.postgrest.rpc(
+                "set_betting_group_rules",
+                buildJsonObject {
+                    put("p_group_id", groupId)
+                    put("p_rules", rules.trim())
+                }
+            ).data
+            decodeList(BettingGroupRow.serializer(), data).single().toDomain()
+        }
+    }
+
     override suspend fun getGroupBets(groupId: String): Result<List<Bet>> = request {
         require(groupId.isNotBlank()) { "Empty group id" }
         fetchPages(BetRow.serializer(), "bets") {

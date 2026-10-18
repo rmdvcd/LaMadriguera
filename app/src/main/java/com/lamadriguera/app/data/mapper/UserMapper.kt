@@ -9,7 +9,8 @@ fun UserRow.toDomain(): User = User(
     phone = phone,
     verificationLevel = verificationLevel,
     status = status,
-    createdAt = Instant.parse(createdAt)
+    createdAt = Instant.parse(createdAt),
+    suspendedUntil = suspendedUntil?.let(Instant::parse)
 )
 
 fun User.toRow(): UserRow = UserRow(
@@ -17,5 +18,6 @@ fun User.toRow(): UserRow = UserRow(
     phone = phone,
     verificationLevel = verificationLevel,
     status = status,
-    createdAt = createdAt.toString()
+    createdAt = createdAt.toString(),
+    suspendedUntil = suspendedUntil?.toString()
 )

@@ -33,12 +33,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.lamadriguera.app.R
 import com.lamadriguera.app.domain.model.Bet
 import com.lamadriguera.app.domain.model.BettingGroup
 import com.lamadriguera.app.domain.model.BettingGroupMember
+import com.lamadriguera.app.domain.model.GroupMessage
+import com.lamadriguera.app.domain.model.ModerationTargetType
+import com.lamadriguera.app.feature.moderation.ReportButton
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import androidx.compose.ui.res.stringResource
 
 /** Lista de grupos, gestión de miembros, controles de juego e historial completo. */
 @Composable
@@ -57,6 +62,11 @@ fun BettingGroupScreen(
     onDailyLimitChanged: (String) -> Unit,
     onSaveDailyLimit: () -> Unit,
     onSelfExclude: () -> Unit,
+    onOpenGroupAdmin: () -> Unit = {},
+    wallMessages: List<GroupMessage> = emptyList(),
+    wallDraft: String = "",
+    onWallDraftChanged: (String) -> Unit = {},
+    onPostWallMessage: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember(state.groupId, initialTab) { mutableIntStateOf(initialTab.coerceIn(0, 1)) }
@@ -146,6 +156,23 @@ fun BettingGroupScreen(
                 OutlinedButton(onClick = onRefresh) { Text("Reintentar") }
             } else {
                 GroupHeader(group = group, isOwner = state.isCurrentGroupOwner)
+                if (group.rules.isNotBlank()) {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                stringResource(R.string.group_admin_rules_title),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(group.rules, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+                if (state.isCurrentGroupOwner) {
+                    OutlinedButton(onClick = onOpenGroupAdmin, enabled = !state.isBusy) {
+                        Text(stringResource(R.string.group_admin_open))
+                    }
+                }
                 if (!state.isMemberOfCurrentGroup) {
                     Text("Las apuestas y miembros solo están visibles para quienes pertenecen al grupo.")
                     if (group.visibility == "public") {
@@ -195,6 +222,14 @@ fun BettingGroupScreen(
                             MemberRow(member, isOwner = member.userId == group.ownerId, canRemove = false, onRemove = {})
                         }
                     }
+
+                    GroupWallCard(
+                        messages = wallMessages,
+                        draft = wallDraft,
+                        onDraftChanged = onWallDraftChanged,
+                        onPost = onPostWallMessage,
+                        enabled = !state.isBusy
+                    )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -380,3 +415,73 @@ private fun CreateGroupDialog(
 private fun formatDate(value: Instant?): String = value?.atZone(ZoneOffset.UTC)?.format(
     DateTimeFormatter.ofPattern("dd/MM/yyyy")
 ) ?: ""
+
+/**
+ * Muro del grupo (grupos públicos): los mensajes pasan la moderación de texto
+ * (ModerateContentUseCase) antes de publicar. Cada mensaje tiene su botón de
+ * reporte; los admins del grupo los ocultan desde el panel sin borrar nada.
+ */
+@Composable
+private fun GroupWallCard(
+    messages: List<GroupMessage>,
+    draft: String,
+    onDraftChanged: (String) -> Unit,
+    onPost: () -> Unit,
+    enabled: Boolean
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                stringResource(R.string.group_wall_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            OutlinedTextField(
+                value = draft,
+                onValueChange = onDraftChanged,
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 2,
+                enabled = enabled,
+                placeholder = { Text(stringResource(R.string.group_wall_hint)) }
+            )
+            Button(onClick = onPost, enabled = enabled && draft.isNotBlank()) {
+                Text(stringResource(R.string.group_wall_send))
+            }
+            if (messages.isEmpty()) {
+                Text(stringResource(R.string.group_wall_empty), style = MaterialTheme.typography.bodySmall)
+            }
+            messages.forEach { message ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        if (message.isHidden) {
+                            Text(
+                                stringResource(R.string.group_wall_hidden),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        } else {
+                            Text(message.body, style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Text(
+                            formatDate(message.createdAt),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (!message.isHidden) {
+                        ReportButton(
+                            targetType = ModerationTargetType.GROUP_MESSAGE,
+                            targetId = message.id
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

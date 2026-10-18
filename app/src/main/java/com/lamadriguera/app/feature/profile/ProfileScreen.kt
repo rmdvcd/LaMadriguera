@@ -36,6 +36,8 @@ import com.lamadriguera.app.R
 import com.lamadriguera.app.domain.model.AccountKind
 import com.lamadriguera.app.domain.model.AuthSession
 import com.lamadriguera.app.domain.model.VerificationLevel
+import com.lamadriguera.app.feature.moderation.ReportButton
+import com.lamadriguera.app.domain.model.ModerationTargetType
 import com.lamadriguera.app.ui.components.ReputationStars
 
 /**
@@ -86,10 +88,17 @@ fun ProfileScreen(
             }
         }
         Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = profile?.displayName.orEmpty(),
-            style = MaterialTheme.typography.headlineSmall
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = profile?.displayName.orEmpty(),
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.weight(1f, fill = true)
+            )
+            ReportButton(
+                targetType = ModerationTargetType.PROFILE,
+                targetId = session.user.id
+            )
+        }
         Text(
             text = profile?.alias?.let { "@$it" }
                 ?: stringResource(R.string.profile_alias_none),
