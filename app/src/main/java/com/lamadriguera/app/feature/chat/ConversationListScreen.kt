@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -54,11 +55,15 @@ fun ConversationListScreen(
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        // Aviso persistente cuando moderación descifró un hilo del usuario.
-        state.decryptedNotice?.let { notice ->
+        // Notificación persistente del sistema, incluidos pagos y moderación.
+        state.systemNotice?.let { notice ->
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
+                    containerColor = if (notice.type != "thread_decrypted") {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.errorContainer
+                    }
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -67,23 +72,41 @@ fun ConversationListScreen(
                 Column(modifier = Modifier.padding(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Filled.Gavel,
+                            imageVector = if (notice.type != "thread_decrypted") {
+                                Icons.Filled.Notifications
+                            } else {
+                                Icons.Filled.Gavel
+                            },
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onErrorContainer
+                            tint = if (notice.type != "thread_decrypted") {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onErrorContainer
+                            }
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = stringResource(R.string.chat_thread_decrypted_notice),
+                            text = if (notice.type == "thread_decrypted") {
+                                stringResource(R.string.chat_thread_decrypted_notice)
+                            } else notice.title,
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onErrorContainer
+                            color = if (notice.type != "thread_decrypted") {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onErrorContainer
+                            }
                         )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = notice.body,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer
+                        color = if (notice.type != "thread_decrypted") {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        }
                     )
                     TextButton(
                         onClick = onDismissNotice,

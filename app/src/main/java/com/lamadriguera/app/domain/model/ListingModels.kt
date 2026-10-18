@@ -84,7 +84,9 @@ data class ListingCandidate(
     /** Tasa de respuesta del anunciante en [0.0, 1.0]. */
     val responseRate: Double = 0.5,
     /** Distancia estimada en km cuando se dispone de ubicación relativa. */
-    val distanceKm: Double? = null
+    val distanceKm: Double? = null,
+    /** Promociones vigentes del anuncio, usadas para alcance y espacios 1/5. */
+    val activePromotions: List<Boost> = emptyList()
 )
 
 /**
@@ -103,7 +105,10 @@ data class RankedListing(
     val responseScore: Double,
     val baseScore: Double,
     val finalScore: Double,
-    val isBoostApplied: Boolean
+    /** El multiplicador puede estar limitado por reputación; la etiqueta no. */
+    val isBoostApplied: Boolean,
+    val isPromoted: Boolean = isBoostApplied,
+    val isFeatured: Boolean = false
 )
 
 /**

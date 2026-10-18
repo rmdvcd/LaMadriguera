@@ -35,6 +35,7 @@ import com.lamadriguera.app.R
 import com.lamadriguera.app.domain.model.AuctionState
 import com.lamadriguera.app.domain.model.CubanMunicipalities
 import com.lamadriguera.app.domain.model.ListingKind
+import com.lamadriguera.app.domain.model.ListingStatus
 import com.lamadriguera.app.domain.model.ListingVisibility
 import com.lamadriguera.app.domain.model.PrivacyLevel
 import com.lamadriguera.app.domain.model.SaleMode
@@ -42,6 +43,7 @@ import com.lamadriguera.app.ui.components.ErrorState
 import com.lamadriguera.app.ui.components.LoadingState
 import com.lamadriguera.app.ui.components.ReputationStars
 import java.math.BigDecimal
+import java.time.Instant
 
 /**
  * Pantalla de detalle de publicación (`ListingDetailScreen`).
@@ -60,6 +62,7 @@ fun ListingDetailScreen(
     onOpenBidHistory: (String) -> Unit,
     onOpenAuctionConfig: (String) -> Unit,
     onEditListing: (String) -> Unit,
+    onPromoteListing: (String) -> Unit,
     onOpenIdentityVerification: () -> Unit,
     onContactSeller: () -> Unit,
     onRetry: () -> Unit,
@@ -113,6 +116,9 @@ fun ListingDetailScreen(
                         onClick = {},
                         label = { Text(state.categoryName) }
                     )
+                    if (listing.boostedUntil?.isAfter(Instant.now()) == true) {
+                        AssistChip(onClick = {}, label = { Text("Promocionado") })
+                    }
                     if (listing.kind == ListingKind.REQUEST &&
                         listing.visibility == ListingVisibility.PROVIDERS_ONLY
                     ) {
@@ -192,11 +198,39 @@ fun ListingDetailScreen(
 
                 if (state.isOwner) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    OutlinedButton(
-                        onClick = { onEditListing(listing.id) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(stringResource(R.string.listings_edit))
+                    if (listing.status == ListingStatus.PAUSED_PAYMENT) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "Publicación pausada mientras el cobrador revisa el pago. No se ha eliminado.",
+                                modifier = Modifier.padding(16.dp),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { onEditListing(listing.id) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(R.string.listings_edit))
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = { onPromoteListing(listing.id) },
+                            enabled = listing.status in setOf(
+                                ListingStatus.ACTIVE,
+                                ListingStatus.FIXED,
+                                ListingStatus.AUCTION_SCHEDULED,
+                                ListingStatus.AUCTION_LIVE
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Promocionar publicación")
+                        }
                     }
                 } else {
                     Spacer(modifier = Modifier.height(16.dp))

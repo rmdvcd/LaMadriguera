@@ -337,7 +337,7 @@ private fun RankedListingCard(
                         label = { Text(stringResource(R.string.listings_badge_providers_only)) }
                     )
                 }
-                if (item.isBoostApplied) {
+                if (item.isPromoted) {
                     AssistChip(
                         onClick = onClick,
                         label = { Text(stringResource(R.string.listings_badge_boosted)) }

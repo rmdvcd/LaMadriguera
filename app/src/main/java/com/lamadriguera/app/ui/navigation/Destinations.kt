@@ -52,7 +52,11 @@ sealed interface Destinations {
     @Serializable data object PrivacySettings : Destinations
 
     // --- Pagos ---
-    @Serializable data object Payments : Destinations
+    @Serializable data class Payments(
+        val listingId: String? = null,
+        val paymentId: String? = null
+    ) : Destinations
+    @Serializable data object AdminPaymentQueue : Destinations
     @Serializable data object Deposit : Destinations
     @Serializable data object Withdraw : Destinations
     @Serializable data object TransactionHistory : Destinations

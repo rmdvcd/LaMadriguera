@@ -16,6 +16,6 @@ class SupabaseBoostsRepository @Inject constructor(client: SupabaseClient) :
         serializer = BoostRow.serializer(),
         toDomain = { it.toDomain() },
         toRow = { it.toRow() },
-        insertColumns = setOf("id", "listing_id", "tier", "starts_at", "ends_at", "payment_id"),
+        insertColumns = setOf("id", "listing_id", "tier", "starts_at", "ends_at", "payment_id", "product_type", "reach_scope"),
         updateColumns = emptySet()
     ), BoostsRepository

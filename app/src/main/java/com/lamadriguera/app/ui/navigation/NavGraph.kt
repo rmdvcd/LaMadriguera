@@ -58,6 +58,10 @@ import com.lamadriguera.app.feature.profile.PrivacySettingsScreen
 import com.lamadriguera.app.feature.profile.PrivacySettingsViewModel
 import com.lamadriguera.app.feature.profile.ProfileScreen
 import com.lamadriguera.app.feature.profile.ProfileViewModel
+import com.lamadriguera.app.feature.payments.PaymentScreen
+import com.lamadriguera.app.feature.payments.PaymentViewModel
+import com.lamadriguera.app.feature.payments.AdminPaymentQueueScreen
+import com.lamadriguera.app.feature.payments.AdminPaymentQueueViewModel
 import com.lamadriguera.app.ui.components.ErrorState
 import com.lamadriguera.app.ui.components.LaMadrigueraBottomBar
 import com.lamadriguera.app.ui.components.LaMadrigueraTopBar
@@ -193,6 +197,9 @@ fun LaMadrigueraNavGraph(
                     onEditListing = { id ->
                         navController.navigate(Destinations.EditListing(id))
                     },
+                    onPromoteListing = { id ->
+                        navController.navigate(Destinations.Payments(listingId = id))
+                    },
                     onOpenIdentityVerification = {
                         navController.navigate(Destinations.IdentityVerification)
                     },
@@ -326,6 +333,9 @@ fun LaMadrigueraNavGraph(
                     },
                     onEditListing = { id ->
                         navController.navigate(Destinations.EditListing(id))
+                    },
+                    onPromoteListing = { id ->
+                        navController.navigate(Destinations.Payments(listingId = id))
                     },
                     onOpenIdentityVerification = {
                         navController.navigate(Destinations.IdentityVerification)
@@ -561,6 +571,7 @@ fun LaMadrigueraNavGraph(
                         onOpenIdentityVerification = {
                             navController.navigate(Destinations.IdentityVerification)
                         },
+                        onOpenPayments = { navController.navigate(Destinations.Payments()) },
                         onLogout = viewModel::logout
                     )
                     is UiState.Error -> ErrorState(
@@ -614,9 +625,47 @@ fun LaMadrigueraNavGraph(
                 )
             }
 
-            // Pagos
+            // Monetización y pagos manuales por Transfermóvil
             composable<Destinations.Payments> {
-                PlaceholderScreen(R.string.payments_title)
+                val viewModel: PaymentViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                PaymentScreen(
+                    state = state,
+                    onRefresh = viewModel::refresh,
+                    onCreateOrder = viewModel::createOrder,
+                    onSubmitProof = viewModel::submitProof,
+                    onRetryPayment = viewModel::retryOrder,
+                    onPaymentNavigated = viewModel::onPaymentNavigated,
+                    onOpenPayment = { id ->
+                        navController.navigate(
+                            Destinations.Payments(listingId = state.listing?.id, paymentId = id)
+                        )
+                    },
+                    onOpenAdminQueue = { navController.navigate(Destinations.AdminPaymentQueue) }
+                )
+            }
+            composable<Destinations.AdminPaymentQueue> {
+                val viewModel: AdminPaymentQueueViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                AdminPaymentQueueScreen(
+                    state = state,
+                    onRefresh = viewModel::refresh,
+                    onOpenPayment = viewModel::openPayment,
+                    onClosePayment = viewModel::closePayment,
+                    onAmountChanged = viewModel::onAmountChanged,
+                    onTransferAtChanged = viewModel::onTransferAtChanged,
+                    onTransferLast4Changed = viewModel::onTransferLast4Changed,
+                    onReferenceChanged = viewModel::onReferenceChanged,
+                    onRejectionReasonChanged = viewModel::onRejectionReasonChanged,
+                    onBlacklistChanged = viewModel::onBlacklistChanged,
+                    onConfirm = viewModel::confirmPayment,
+                    onReject = viewModel::rejectPayment,
+                    onTransferAccountChanged = viewModel::onTransferAccountChanged,
+                    onAccountHolderChanged = viewModel::onAccountHolderChanged,
+                    onSaveSettings = viewModel::saveSettings,
+                    onProductPriceChanged = viewModel::onProductPriceChanged,
+                    onSaveProductPrice = viewModel::saveProductPrice
+                )
             }
             composable<Destinations.Deposit> {
                 PlaceholderScreen(R.string.payments_deposit)
@@ -682,6 +731,7 @@ private fun NavDestination.topBarTitleRes(): Int = when {
     hasRoute<Destinations.IdentityVerification>() -> R.string.identity_title
     hasRoute<Destinations.PrivacySettings>() -> R.string.privacy_title
     hasRoute<Destinations.Payments>() -> R.string.payments_title
+    hasRoute<Destinations.AdminPaymentQueue>() -> R.string.payments_admin_queue
     hasRoute<Destinations.Deposit>() -> R.string.payments_deposit
     hasRoute<Destinations.Withdraw>() -> R.string.payments_withdraw
     hasRoute<Destinations.TransactionHistory>() -> R.string.screen_transactions
