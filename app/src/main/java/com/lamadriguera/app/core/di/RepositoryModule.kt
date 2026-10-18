@@ -36,6 +36,9 @@ abstract class RepositoryModule {
     abstract fun bindMessages(impl: SupabaseMessagesRepository): MessagesRepository
 
     @Binds @Singleton
+    abstract fun bindChat(impl: SupabaseChatRepository): ChatRepository
+
+    @Binds @Singleton
     abstract fun bindReviews(impl: SupabaseReviewsRepository): ReviewsRepository
 
     @Binds @Singleton

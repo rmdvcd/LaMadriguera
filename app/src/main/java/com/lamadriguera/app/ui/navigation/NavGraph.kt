@@ -38,6 +38,10 @@ import com.lamadriguera.app.feature.auth.PhoneLoginScreen
 import com.lamadriguera.app.feature.auth.PhoneLoginViewModel
 import com.lamadriguera.app.feature.auth.SplashScreen
 import com.lamadriguera.app.feature.auth.SplashViewModel
+import com.lamadriguera.app.feature.chat.ChatScreen
+import com.lamadriguera.app.feature.chat.ChatViewModel
+import com.lamadriguera.app.feature.chat.ConversationListScreen
+import com.lamadriguera.app.feature.chat.ConversationListViewModel
 import com.lamadriguera.app.feature.listings.CreateListingScreen
 import com.lamadriguera.app.feature.listings.CreateListingViewModel
 import com.lamadriguera.app.feature.listings.ListingDetailScreen
@@ -186,8 +190,16 @@ fun LaMadrigueraNavGraph(
                     onOpenIdentityVerification = {
                         navController.navigate(Destinations.IdentityVerification)
                     },
+                    onContactSeller = viewModel::openChat,
                     onRetry = viewModel::refresh
                 )
+                LaunchedEffect(state.chatConversationId) {
+                    val conversationId = state.chatConversationId
+                    if (conversationId != null) {
+                        viewModel.onChatNavigated()
+                        navController.navigate(Destinations.ChatThread(conversationId))
+                    }
+                }
             }
             composable<Destinations.CreateListing> {
                 val viewModel: CreateListingViewModel = hiltViewModel()
@@ -312,8 +324,16 @@ fun LaMadrigueraNavGraph(
                     onOpenIdentityVerification = {
                         navController.navigate(Destinations.IdentityVerification)
                     },
+                    onContactSeller = viewModel::openChat,
                     onRetry = viewModel::refresh
                 )
+                LaunchedEffect(state.chatConversationId) {
+                    val conversationId = state.chatConversationId
+                    if (conversationId != null) {
+                        viewModel.onChatNavigated()
+                        navController.navigate(Destinations.ChatThread(conversationId))
+                    }
+                }
             }
             composable<Destinations.CreateAuction> {
                 val viewModel: CreateListingViewModel = hiltViewModel()
@@ -383,12 +403,42 @@ fun LaMadrigueraNavGraph(
                 )
             }
 
-            // Chat
+            // Chat (diseño C: cifrado E2E + escrow de disputa)
             composable<Destinations.Conversations> {
-                PlaceholderScreen(R.string.nav_chat)
+                val viewModel: ConversationListViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                ConversationListScreen(
+                    state = state,
+                    onOpenConversation = { id ->
+                        navController.navigate(Destinations.ChatThread(id))
+                    },
+                    onDismissNotice = viewModel::dismissNotifications,
+                    onRetry = viewModel::refresh
+                )
             }
             composable<Destinations.ChatThread> {
-                PlaceholderScreen(R.string.screen_chat_thread)
+                val viewModel: ChatViewModel = hiltViewModel()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                ChatScreen(
+                    state = state,
+                    onDraftChanged = viewModel::onDraftChanged,
+                    onExpiryChanged = viewModel::onExpiryChanged,
+                    onSendText = viewModel::onSendText,
+                    onImagePicked = viewModel::onImagePicked,
+                    onAudioPicked = viewModel::onAudioPicked,
+                    onMediaPickFailed = viewModel::onMediaPickFailed,
+                    onLocationRequestStarted = viewModel::onLocationRequestStarted,
+                    onLocationAvailable = viewModel::onLocationAvailable,
+                    onLocationFailed = viewModel::onLocationFailed,
+                    onConfirmPersonalData = viewModel::confirmPersonalDataSend,
+                    onDismissPersonalData = viewModel::dismissPersonalDataWarning,
+                    onOpenReport = viewModel::openReportDialog,
+                    onCloseReport = viewModel::closeReportDialog,
+                    onReportReasonChanged = viewModel::onReportReasonChanged,
+                    onSubmitReport = viewModel::submitReport,
+                    onDismissReportBanner = viewModel::dismissReportBanner,
+                    onDismissError = viewModel::dismissError
+                )
             }
 
             // Apuestas

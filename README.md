@@ -253,7 +253,14 @@ Tipografía del sistema para mantener el APK ligero (redes móviles limitadas).
       ×1.3 sin saltar reputación < 3), modo subasta configurable (`AuctionConfigScreen`,
       `ListingDetailScreen`, `BidHistoryScreen`), seguridad de pujas y cierre de subastas
       (RPC `close_auction` / `close_due_auctions` + `AuctionClosureWorker`).
-- [ ] **Fase 3 — Chat:** Realtime, conversaciones y mensajes.
+- [x] **Fase 3 — Chat cifrado (diseño C):** conversaciones y mensajes en tiempo real
+      (Realtime) con cifrado extremo a extremo (AES-256-GCM + X25519, HKDF-SHA256):
+      texto, imagen/audio ≤ 1 MB y ubicación; caducidad opcional de 24 h / 7 d con
+      autodestrucción en cliente y `purge_expired_messages()` en el servidor; aviso
+      al compartir teléfono/correo; reporte que abre ticket de disputa; descifrado
+      SOLO con quórum 2-de-2 (admin general + moderador senior) por el proceso
+      `supabase/functions/dispute-decrypt`, con log inmutable en `moderation_actions`,
+      transcripción para moderación y aviso a ambas partes. Ver `supabase/README.md`.
 - [ ] **Fase 4 — Apuestas:** validación de saldo y reglas peer-to-peer.
 - [ ] **Fase 5 — Pagos y moderación.**
 - [ ] **Fase 6 — Offline-first:** Room + WorkManager para sincronización con redes inestables.

@@ -8,3 +8,14 @@
 # Credenciales de Supabase (Settings -> API)
 SUPABASE_URL=https://tu-proyecto.supabase.co
 SUPABASE_ANON_KEY=tu-anon-key-publica
+
+# Claves públicas X25519 (base64) de custodia del chat cifrado (diseño C).
+# Con ellas la app envuelve las MITADES de la clave privada de disputa de cada
+# conversación; las privadas correspondientes viven SOLO en el proceso backend
+# de disputa (secretos de la Edge Function dispute-decrypt).
+# DISPUTE_ADMIN_PUB → custodo: admin general.
+# DISPUTE_MODERATOR_PUB → custodo: moderador senior.
+# Si se omiten, la app usa el par de DESARROLLO embebido en DisputeKeyConfig
+# (cuyas privadas están publicadas a propósito; nunca lo uses en producción).
+# DISPUTE_ADMIN_PUB=base64-de-32-bytes
+# DISPUTE_MODERATOR_PUB=base64-de-32-bytes

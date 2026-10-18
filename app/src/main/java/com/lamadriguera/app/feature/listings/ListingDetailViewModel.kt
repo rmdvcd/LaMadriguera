@@ -15,6 +15,7 @@ import com.lamadriguera.app.domain.model.VerificationLevel
 import com.lamadriguera.app.domain.repository.AuctionRepository
 import com.lamadriguera.app.domain.repository.AuthRepository
 import com.lamadriguera.app.domain.repository.CategoriesRepository
+import com.lamadriguera.app.domain.repository.ChatRepository
 import com.lamadriguera.app.domain.repository.ListingsRepository
 import com.lamadriguera.app.domain.repository.ProfilesRepository
 import com.lamadriguera.app.domain.usecase.AuctionConfigValidator
@@ -51,6 +52,8 @@ data class ListingDetailUiState(
     val bidAmountInput: String = "",
     val isPlacingBid: Boolean = false,
     val isClosingAuction: Boolean = false,
+    val isOpeningChat: Boolean = false,
+    val chatConversationId: String? = null,
     val errorMessage: String? = null,
     val feedbackMessage: String? = null
 ) {
@@ -100,7 +103,8 @@ class ListingDetailViewModel @Inject constructor(
     private val auctionRepository: AuctionRepository,
     private val profilesRepository: ProfilesRepository,
     private val categoriesRepository: CategoriesRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val chatRepository: ChatRepository
 ) : ViewModel() {
 
     private val listingId: String = savedStateHandle["listingId"]
@@ -204,6 +208,38 @@ class ListingDetailViewModel @Inject constructor(
 
     fun onBidAmountChanged(value: String) {
         _uiState.update { it.copy(bidAmountInput = value, errorMessage = null, feedbackMessage = null) }
+    }
+
+    /**
+     * Abre (o crea) la conversación cifrada con el anunciante. La navegación
+     * la hace el NavGraph al observar `chatConversationId`.
+     */
+    fun openChat() {
+        val listing = _uiState.value.listing ?: return
+        val currentUser = _uiState.value.currentUser ?: return
+        if (currentUser.id == listing.ownerId || _uiState.value.isOpeningChat) return
+        _uiState.update { it.copy(isOpeningChat = true, errorMessage = null) }
+        viewModelScope.launch {
+            when (val result = chatRepository.getOrCreateConversation(listing.id, listing.ownerId)) {
+                is Result.Success -> _uiState.update {
+                    it.copy(
+                        isOpeningChat = false,
+                        chatConversationId = result.data.conversation.id
+                    )
+                }
+                is Result.Error -> _uiState.update {
+                    it.copy(
+                        isOpeningChat = false,
+                        errorMessage = result.message ?: "No se pudo abrir el chat"
+                    )
+                }
+            }
+        }
+    }
+
+    /** Resetea el destino de chat tras navegar (evita re-navegar al volver). */
+    fun onChatNavigated() {
+        _uiState.update { it.copy(chatConversationId = null) }
     }
 
     fun placeBid() {

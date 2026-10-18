@@ -45,8 +45,20 @@ android {
             "SUPABASE_ANON_KEY",
             "\"${secretOrPlaceholder("SUPABASE_ANON_KEY", "placeholder-anon-key")}\""
         )
-    }
 
+        // Claves públicas X25519 de custodia (base64) para el chat cifrado.
+        // En local se usa el par de desarrollo embebido en DisputeKeyConfig.
+        buildConfigField(
+            "String",
+            "DISPUTE_ADMIN_PUB",
+            "\"${secretOrPlaceholder("DISPUTE_ADMIN_PUB", "placeholder-dev-key")"}\""
+        )
+        buildConfigField(
+            "String",
+            "DISPUTE_MODERATOR_PUB",
+            "\"${secretOrPlaceholder("DISPUTE_MODERATOR_PUB", "placeholder-dev-key")"}\""
+        )
+    }
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"

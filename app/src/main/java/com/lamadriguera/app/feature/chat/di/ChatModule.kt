@@ -5,10 +5,13 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 
 /**
- * Módulo Hilt del feature Chat.
- * Mensajería en tiempo real mediante Supabase Realtime.
+ * Módulo Hilt del feature Chat (diseño C).
  *
- * Fase 2: bindear ChatRepository y proveer helpers de canales Realtime.
+ * El contrato `ChatRepository` está bindeado en
+ * [com.lamadriguera.app.core.di.RepositoryModule] a
+ * `SupabaseChatRepository`; los primitivos criptográficos (AES-256-GCM,
+ * X25519, envolturas, cofre local) se proveen desde
+ * [com.lamadriguera.app.core.di.SecurityModule].
  */
 @Module
 @InstallIn(SingletonComponent::class)

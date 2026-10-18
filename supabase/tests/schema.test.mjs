@@ -11,6 +11,7 @@ const admin = '00000000-0000-0000-0000-000000000004';
 const listing = '10000000-0000-0000-0000-000000000001';
 const paused = '10000000-0000-0000-0000-000000000002';
 const conversation = '20000000-0000-0000-0000-000000000001';
+const conversation2 = '20000000-0000-0000-0000-000000000002';
 const group = '30000000-0000-0000-0000-000000000001';
 const category = '40000000-0000-0000-0000-000000000001';
 
@@ -59,6 +60,7 @@ await db.exec(`
 await db.exec(await readFile(new URL('../migrations/001_initial_schema.sql', import.meta.url), 'utf8'));
 await db.exec(await readFile(new URL('../migrations/002_auth_identity_privacy.sql', import.meta.url), 'utf8'));
 await db.exec(await readFile(new URL('../migrations/003_listings_auctions.sql', import.meta.url), 'utf8'));
+await db.exec(await readFile(new URL('../migrations/004_chat_encryption_disputes.sql', import.meta.url), 'utf8'));
 await db.exec(`
   INSERT INTO auth.users(id) VALUES ('${user}'), ('${peer}'), ('${outsider}'), ('${admin}');
   INSERT INTO public.categories(id, name) VALUES ('${category}', 'General');
@@ -77,9 +79,9 @@ await db.exec(`
     VALUES ('${group}', '${user}', 'Apuesta', 10);
 `);
 
-test('all 16 application tables have RLS enabled', async () => {
+test('all 20 application tables have RLS enabled', async () => {
   const result = await db.query("SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND rowsecurity");
-  assert.equal(count(result), 16);
+  assert.equal(count(result), 20);
 });
 
 test('Kotlin row wire names match every SQL column', async () => {
@@ -88,7 +90,9 @@ test('Kotlin row wire names match every SQL column', async () => {
     Category: 'categories', Listing: 'listings', Bid: 'bids', Conversation: 'conversations',
     Message: 'messages', Review: 'reviews', Report: 'reports', Payment: 'payments',
     Boost: 'boosts', BettingGroup: 'betting_groups', BettingGroupMember: 'betting_group_members',
-    Bet: 'bets', ModerationAction: 'moderation_actions'
+    Bet: 'bets', ModerationAction: 'moderation_actions',
+    ConversationKey: 'conversation_keys', DisputeTicket: 'dispute_tickets',
+    UserNotification: 'user_notifications'
   };
   for (const [model, table] of Object.entries(mappings)) {
     const source = await readFile(new URL(`../../app/src/main/java/com/lamadriguera/app/data/remote/supabase/row/${model}Row.kt`, import.meta.url), 'utf8');
@@ -471,3 +475,104 @@ test('numeric precision, bytea and constraints are native PostgreSQL types', asy
 });
 
 test.after(async () => { await db.close(); });
+
+let approvedTicketId;
+
+test('chat crypto: chat key publish, conversation_keys participant-scoped', async () => {
+  await as(user, `UPDATE public.profiles SET chat_public_key = '\\x110022' WHERE user_id = '${user}'`);
+  const published = await as(peer, `SELECT chat_public_key::text AS key FROM public.profiles WHERE user_id = '${user}'`);
+  assert.equal(published.rows[0].key, '\\x110022');
+  const forged = await as(outsider, `UPDATE public.profiles SET chat_public_key = '\\x00' WHERE user_id = '${user}' RETURNING user_id`);
+  assert.equal(forged.rows.length, 0);
+
+  // Los sobres de sesión solo son legibles por participantes y solo se
+  // depositan para miembros del hilo; no se pueden editar ni borrar.
+  await as(user, `INSERT INTO public.conversation_keys(conversation_id, user_id, wrapped_key) VALUES ('${conversation}', '${user}', '\\x0a0b')`);
+  await as(user, `INSERT INTO public.conversation_keys(conversation_id, user_id, wrapped_key) VALUES ('${conversation}', '${peer}', '\\x0a0b')`);
+  assert.equal(count(await as(peer, 'SELECT count(*) FROM public.conversation_keys')), 2);
+  assert.equal(count(await as(outsider, 'SELECT count(*) FROM public.conversation_keys')), 0);
+  await assert.rejects(as(outsider, `INSERT INTO public.conversation_keys(conversation_id, user_id, wrapped_key) VALUES ('${conversation}', '${outsider}', '\\x0a0b')`), /row-level security/);
+  await assert.rejects(as(user, `INSERT INTO public.conversation_keys(conversation_id, user_id, wrapped_key) VALUES ('${conversation}', '${outsider}', '\\x0a0b')`), /row-level security/);
+  await assert.rejects(as(user, `UPDATE public.conversation_keys SET wrapped_key = '\\x00'`), /permission denied/);
+  await assert.rejects(as(user, 'DELETE FROM public.conversation_keys'), /permission denied/);
+});
+
+test('dispute tickets: report opens them once; only moderators resolve', async () => {
+  await db.exec(`INSERT INTO public.conversations(id, listing_id, participant_a, participant_b)
+    VALUES ('${conversation2}', '${listing}', '${user}', '${peer}')`);
+  await assert.rejects(as(outsider, `SELECT * FROM public.report_conversation('${conversation2}', 'estafa')`), /Only participants/);
+  await assert.rejects(as(user, `SELECT * FROM public.report_conversation('${conversation2}', '')`), /Invalid dispute reason/);
+
+  const first = await as(user, `SELECT * FROM public.report_conversation('${conversation2}', 'estafa')`);
+  assert.equal(first.rows[0].status, 'open');
+  assert.equal(first.rows[0].opened_by, user);
+  // Idempotente: un solo ticket vivo por conversación.
+  const second = await as(peer, `SELECT * FROM public.report_conversation('${conversation2}', 'abuso')`);
+  assert.equal(second.rows[0].id, first.rows[0].id);
+  approvedTicketId = first.rows[0].id;
+
+  const conv = await db.query(`SELECT status FROM public.conversations WHERE id = '${conversation2}'`);
+  assert.equal(conv.rows[0].status, 'disputed');
+  assert.equal(count(await as(user, `SELECT count(*) FROM public.reports WHERE target_id = '${conversation2}'`)), 1);
+
+  // Visibilidad: ambas partes y moderación, nunca terceros.
+  assert.equal(count(await as(outsider, 'SELECT count(*) FROM public.dispute_tickets')), 0);
+  assert.equal(count(await as(peer, `SELECT count(*) FROM public.dispute_tickets WHERE conversation_id = '${conversation2}'`)), 1);
+  assert.equal(count(await as(admin, 'SELECT count(*) FROM public.dispute_tickets', 'authenticated', 'moderator')), 1);
+
+  await assert.rejects(as(user, `SELECT * FROM public.resolve_dispute_ticket('${approvedTicketId}', true)`), /Only moderators/);
+  const resolved = await as(admin, `SELECT * FROM public.resolve_dispute_ticket('${approvedTicketId}', true)`, 'authenticated', 'moderator');
+  assert.equal(resolved.rows[0].status, 'approved');
+  assert.equal(resolved.rows[0].approved_by, admin);
+  await assert.rejects(as(admin, `SELECT * FROM public.resolve_dispute_ticket('${approvedTicketId}', true)`, 'authenticated', 'moderator'), /Ticket not found or already resolved/);
+});
+
+test('expired ciphertext is purged server-side, only by the service role', async () => {
+  await db.exec(`
+    INSERT INTO public.messages(conversation_id, sender_id, content_ref, expires_at) VALUES
+      ('${conversation}', '${user}', 'expired-ciphertext', now() - interval '1 hour'),
+      ('${conversation}', '${user}', 'future-ciphertext', now() + interval '1 hour');
+  `);
+  await assert.rejects(as(user, 'SELECT public.purge_expired_messages()'), /permission denied/);
+  await assert.rejects(as(user, `DELETE FROM public.messages WHERE content_ref = 'expired-ciphertext'`), /permission denied/);
+  const result = await db.query('SELECT public.purge_expired_messages() AS purged');
+  assert.equal(Number(result.rows[0].purged), 1);
+  const remaining = await db.query(`SELECT content_ref FROM public.messages WHERE expires_at IS NOT NULL`);
+  assert.deepEqual(remaining.rows.map(row => row.content_ref), ['future-ciphertext']);
+});
+
+test('moderation_actions is append-only: immutable decrypt logs (who, when, ticket, reason)', async () => {
+  await db.exec(`INSERT INTO public.moderation_actions(target_type, target_id, source, category, severity, action, reason, actor_id)
+    VALUES ('conversation', '${conversation2}', 'admin', 'decryption', 3, 'decrypt_conversation', 'Ticket ${approvedTicketId ?? 'unknown'}: estafa', '${admin}')`);
+  await assert.rejects(db.query(`UPDATE public.moderation_actions SET reason = 'x'`), /append-only/);
+  await assert.rejects(db.query(`DELETE FROM public.moderation_actions WHERE target_id = '${conversation2}'`), /append-only/);
+  await assert.rejects(as(admin, `UPDATE public.moderation_actions SET reason = 'x'`, 'service_role'), /append-only|permission denied/);
+  // El log sigue disponible para moderación.
+  assert.equal(count(await as(admin, 'SELECT count(*) FROM public.moderation_actions', 'authenticated', 'moderator')), 1);
+});
+
+test('thread decryption notifies both participants; only the service can create them', async () => {
+  await assert.rejects(as(user, `INSERT INTO public.user_notifications(user_id, type, title, body) VALUES ('${peer}', 'thread_decrypted', 't', 'b')`), /row-level security|permission denied/);
+  await assert.rejects(as(user, `SELECT public.notify_thread_decrypted('${conversation2}', 'x')`), /permission denied/);
+
+  await db.query(`SELECT public.notify_thread_decrypted('${conversation2}', 'estafa')`);
+  const mine = await as(user, `SELECT title, body FROM public.user_notifications WHERE type = 'thread_decrypted'`);
+  assert.equal(mine.rows.length, 1);
+  assert.equal(mine.rows[0].title, 'Tu hilo fue descifrado por un moderador');
+  assert.match(mine.rows[0].body, /^Motivo: estafa/);
+  assert.equal(count(await as(outsider, 'SELECT count(*) FROM public.user_notifications')), 0);
+
+  // Solo puedo marcar como leídas las mías y únicamente el campo read_at.
+  const read = await as(peer, `UPDATE public.user_notifications SET read_at = now() WHERE user_id = '${peer}' RETURNING id`);
+  assert.equal(read.rows.length, 1);
+  await assert.rejects(as(peer, `UPDATE public.user_notifications SET body = 'x'`), /permission denied/);
+});
+
+test('dispute transcripts are written by the service and are moderator-only', async () => {
+  await db.exec(`INSERT INTO public.dispute_transcripts(ticket_id, conversation_id, actor_id, reason, transcript)
+    VALUES ('${approvedTicketId}', '${conversation2}', '${admin}', 'estafa', '[]'::jsonb)`);
+  assert.equal(count(await as(admin, 'SELECT count(*) FROM public.dispute_transcripts', 'authenticated', 'moderator')), 1);
+  assert.equal(count(await as(user, 'SELECT count(*) FROM public.dispute_transcripts')), 0);
+  assert.equal(count(await as(outsider, 'SELECT count(*) FROM public.dispute_transcripts')), 0);
+  await assert.rejects(as(user, `INSERT INTO public.dispute_transcripts(ticket_id, conversation_id, reason, transcript) VALUES ('${approvedTicketId}', '${conversation2}', 'x', '[]'::jsonb)`), /row-level security|permission denied/);
+});
